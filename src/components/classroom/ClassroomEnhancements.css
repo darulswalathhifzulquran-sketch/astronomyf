@@ -348,3 +348,128 @@
   .classroom-v2 .classroom-name-dialog { border-radius: 16px; gap: 9px; }
   .classroom-v2 .classroom-line-name-actions button { min-height: 48px; }
 }
+
+
+/* Teacher drawing context menu: touch hold / desktop double-click. */
+.classroom-root.classroom-v2 .classroom-line-menu-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 75;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px;
+  background: rgba(6,18,33,.56);
+  overscroll-behavior: contain;
+}
+.classroom-root.classroom-v2 .classroom-line-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  width: min(365px,100%);
+  max-height: min(82dvh,620px);
+  overflow-y: auto;
+  padding: clamp(17px,4vw,24px);
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,.7);
+  background: linear-gradient(145deg,#f7fbff,#dceafb);
+  box-shadow: 0 20px 50px rgba(0,0,0,.34);
+  color: #234365;
+  font-family: "IBM Plex Sans",Arial,sans-serif;
+}
+.classroom-root.classroom-v2 .classroom-line-menu-kicker {
+  font-size: 10px;
+  letter-spacing: .12em;
+  font-weight: 800;
+  color: #5b7d9f;
+}
+.classroom-root.classroom-v2 .classroom-line-menu h2 {
+  margin: 0;
+  color: #173659;
+  font: 800 20px/1.5 "Amiri","Noto Naskh Arabic","IBM Plex Sans",sans-serif;
+  overflow-wrap: anywhere;
+}
+.classroom-root.classroom-v2 .classroom-line-menu p {
+  margin: 0 0 4px;
+  color: #587493;
+  font-size: 12px;
+}
+.classroom-root.classroom-v2 .classroom-line-menu button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  width: 100%;
+  min-height: 46px;
+  padding: 10px 14px;
+  background: #edf5ff;
+  color: #1f4269;
+  border: 1px solid #b6cee6;
+  border-radius: 11px;
+  cursor: pointer;
+  text-align: left;
+  font: 750 13px/1.3 "IBM Plex Sans",Arial,sans-serif;
+}
+.classroom-root.classroom-v2 .classroom-line-menu button:hover {
+  background: #dceafa;
+}
+.classroom-root.classroom-v2 .classroom-line-menu button.classroom-line-menu-delete {
+  background: #fff1f1;
+  border-color: #edb5b8;
+  color: #a22d38;
+}
+.classroom-root.classroom-v2 .classroom-line-menu button.classroom-line-menu-delete:hover {
+  background: #ffe3e3;
+}
+.classroom-root.classroom-v2 .classroom-line-menu button.classroom-line-menu-cancel {
+  background: #fff;
+  color: #4a627c;
+}
+.classroom-root.classroom-v2 .classroom-line-menu small {
+  color: #637b94;
+  font-size: 10px;
+  line-height: 1.55;
+}
+.classroom-root.classroom-v2 .classroom-endpoint-banner {
+  position: absolute;
+  z-index: 51;
+  left: 50%;
+  bottom: calc(120px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: min(92vw,570px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  color: #f5fbff;
+  background: rgba(5,31,58,.94);
+  border: 1px solid rgba(127,190,253,.6);
+  border-radius: 13px;
+  box-shadow: 0 6px 20px rgba(0,0,0,.25);
+  font: 600 11px/1.5 "IBM Plex Sans",Arial,sans-serif;
+}
+.classroom-root.classroom-v2 .classroom-endpoint-banner strong { color: #f8de8b; }
+.classroom-root.classroom-v2 .classroom-endpoint-banner button {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  flex: 0 0 auto;
+  padding: 7px 9px;
+  border: 1px solid rgba(200,230,255,.3);
+  border-radius: 8px;
+  color: #fff;
+  background: rgba(77,135,190,.35);
+  cursor: pointer;
+}
+@media (max-width: 620px) {
+  .classroom-root.classroom-v2 .classroom-line-menu { border-radius: 15px; }
+  .classroom-root.classroom-v2 .classroom-line-menu button { min-height: 50px; }
+  .classroom-root.classroom-v2 .classroom-endpoint-banner {
+    bottom: calc(95px + env(safe-area-inset-bottom));
+    padding: 8px 9px;
+    font-size: 10px;
+    max-width: calc(100vw - 15px);
+  }
+}
