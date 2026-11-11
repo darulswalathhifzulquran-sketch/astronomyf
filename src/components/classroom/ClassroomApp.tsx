@@ -593,8 +593,10 @@ export function ClassroomApp(){
       if(!pending){setPending(point);setInfo("First internal endpoint selected. Choose the other endpoint.");return;}
       if(angle(pending,point)<.006)return;
       snapshot();
-      setMarks(old=>[...old,{id:makeId(),anchorA:pending,anchorB:point,kind:"line",
+      const id=makeId();
+      setMarks(old=>[...old,{id,anchorA:pending,anchorB:point,kind:"line",
         points:segmentInSphere(pending,point),color,width,surface:false,inside:true}]);
+      requestLineNames("mark",[id]);
       setPending(null);
       setInfo("Hollow 3D straight chord drawn through the sphere interior.");
       return;
@@ -617,6 +619,7 @@ export function ClassroomApp(){
         kind:"line",measure:tool==="protractor"&&index===0?angleAt(b,a,c).toFixed(1)+"°":undefined,
       }));
       setMarks(old=>[...old,...newMarks]);
+      requestLineNames("mark",newMarks.map(mark=>mark.id));
       setPendingVertices([]);
       setInfo(tool==="triangle"?"A three-sided surface triangle is drawn.":"Spherical angle: "+angleAt(b,a,c).toFixed(1)+"°");
       return;
@@ -625,13 +628,15 @@ export function ClassroomApp(){
     if(angle(pending,point)<0.006){setInfo("Choose a different point.");return;}
     const a=pending,b=point;
     snapshot();
+    const id=makeId();
     setMarks(old=>[...old,{
-      id:makeId(),points:shapePath(a,b,view==="inside"),
+      id,points:shapePath(a,b,view==="inside"),
       anchorA:a,anchorB:b,color,width,
       kind:tool==="ruler"?"ruler":tool==="pen"?"pen":"line",
       surface:true,inside:view==="inside",
       measure:tool==="ruler"?deg(a,b)+"°":undefined,
     }]);
+    requestLineNames("mark",[id]);
     if(tool==="pen"){
       setPending(point);
       setInfo("Surface stroke added. Click again to continue, drag the globe to rotate.");
@@ -639,7 +644,7 @@ export function ClassroomApp(){
       setPending(null);
       setInfo("Line follows the ball skin. Double-click a handle to adjust it.");
     }
-  },[edit,tool,shape,pending,pendingVertices,view,color,width,snapshot,moveEndpoint,textInput,textSize]);
+  },[edit,tool,shape,pending,pendingVertices,view,color,width,snapshot,moveEndpoint,textInput,textSize,requestLineNames]);
 
   // All pointer positions are relative to the SAME classroom stage, in CSS pixels.
   // Camera raycasting, SVG ink, hit-testing and eraser visuals share this frame.
@@ -692,7 +697,9 @@ export function ClassroomApp(){
         x:(a[0]+b[0])/2,y:(a[1]+b[1])/2,
         label:(dist2(px(a),px(b))/17.5).toFixed(1)+" diagram cm",
       }:undefined;
-      setStrokes(old=>[...old,{id:makeId(),color,width,points:pts,...(measure?{measure}:{})}]);
+      const id=makeId();
+      setStrokes(old=>[...old,{id,color,width,points:pts,...(measure?{measure}:{})}]);
+      requestLineNames("stroke",[id]);
       setPendingScreen(null);
       setInfo(tool==="line"?"A straight line was drawn, independent of the sphere.":"Ruler: measured a straight diagram-space distance.");
       return;
@@ -718,7 +725,9 @@ export function ClassroomApp(){
       }
       const measure=tool==="protractor"?{x:a[0],y:a[1],label:planarAngle(b,a,c).toFixed(1)+"°"}:undefined;
       snapshot();
-      setStrokes(old=>[...old,{id:makeId(),points,color,width,...(measure?{measure}:{})}]);
+      const id=makeId();
+      setStrokes(old=>[...old,{id,points,color,width,...(measure?{measure}:{})}]);
+      requestLineNames("stroke",[id]);
       setPendingScreenVertices([]);
       setInfo(tool==="triangle"?"Straight triangle completed.":"Measured angle: "+planarAngle(b,a,c).toFixed(1)+"°");
     }
@@ -822,7 +831,9 @@ export function ClassroomApp(){
       const a=joinFrom.position,b=best.position;
       // Two 3D points define a straight chord, not a sphere-surface curve.
       const points:Vec[]=[a,b];
-      setMarks(old=>[...old,{id:makeId(),points,color,width,surface:false,inside:true,kind:"line"}]);
+      const id=makeId();
+      setMarks(old=>[...old,{id,points,color,width,surface:false,inside:true,kind:"line"}]);
+      requestLineNames("mark",[id]);
       setInfo("3D Join completed: connected the two selected positions.");
     }else{
       // A board-space annotation has no fixed 3D depth. Mixed joins
@@ -833,7 +844,9 @@ export function ClassroomApp(){
         return p?[p[0]/w,p[1]/h]:normalizedFromPixel(pixel);
       };
       const a=toScreen(joinFrom),b=toScreen(best);
-      setStrokes(old=>[...old,{id:makeId(),points:[a,b],color,width}]);
+      const id=makeId();
+      setStrokes(old=>[...old,{id,points:[a,b],color,width}]);
+      requestLineNames("stroke",[id]);
       setInfo("Join completed in the whiteboard plane.");
     }
     setJoinFrom(null);
