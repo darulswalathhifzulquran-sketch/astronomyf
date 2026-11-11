@@ -223,6 +223,7 @@
   pointer-events: none;
   overflow-wrap: anywhere;
   white-space: normal;
+  transform: translateY(-23px);
 }
 .classroom-v2 .classroom-ink-name {
   fill: #fff;
