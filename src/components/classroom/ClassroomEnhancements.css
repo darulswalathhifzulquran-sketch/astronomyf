@@ -306,11 +306,11 @@
   outline: 2px solid #287bdd;
   outline-offset: 1px;
 }
-.classroom-v2 .classroom-name-actions {
+.classroom-v2 .classroom-line-name-actions {
   display: flex; align-items: center; justify-content: stretch;
   gap: 10px; margin-top: 8px;
 }
-.classroom-v2 .classroom-name-actions button {
+.classroom-v2 .classroom-line-name-actions button {
   flex: 1;
   min-height: 46px;
   padding: 9px 10px;
@@ -345,5 +345,5 @@
   }
   .classroom-v2 .classroom-ink-name { font-size: 13px; }
   .classroom-v2 .classroom-name-dialog { border-radius: 16px; gap: 9px; }
-  .classroom-v2 .classroom-name-actions button { min-height: 48px; }
+  .classroom-v2 .classroom-line-name-actions button { min-height: 48px; }
 }
