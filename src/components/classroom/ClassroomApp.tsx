@@ -957,7 +957,11 @@ export function ClassroomApp(){
       if(!g.dragged)joinAt(p);
     }else if(g.kind==="hollow-pen"){
       const points=hollowDraftRef.current;
-      if(points.length>1)setMarks(old=>[...old,{id:makeId(),points,color,width,surface:false,inside:true,kind:"pen"}]);
+      if(points.length>1){
+        const id=makeId();
+        setMarks(old=>[...old,{id,points,color,width,surface:false,inside:true,kind:"pen"}]);
+        requestLineNames("mark",[id]);
+      }
       hollowDraftRef.current=[];
       setHollowPenDraft([]);
       setInfo("Free 3D pen: successive straight segments run through the hollow interior.");
@@ -965,6 +969,7 @@ export function ClassroomApp(){
       if(drawing){
         const points=drawing.points.length===1?[drawing.points[0]!,drawing.points[0]!]:drawing.points;
         setStrokes(old=>[...old,{...drawing,points}]);
+        requestLineNames("stroke",[drawing.id]);
       }
       setDrawing(null);
     }else if(g.kind==="erase"){
@@ -1026,11 +1031,13 @@ export function ClassroomApp(){
     const label:Stroke["measure"]={x:midpoint[0]/stageSize[0],y:midpoint[1]/stageSize[1],
       label:instrument.degrees.toFixed(0)+"°"};
     snapshot();
+    const ids=[makeId(),makeId(),makeId()];
     setStrokes(old=>[...old,
-      {id:makeId(),color,width,points:normalizedPoints(lerp(center,start,36))},
-      {id:makeId(),color,width,points:normalizedPoints(lerp(center,end,36))},
-      {id:makeId(),color:"#ffc14f",width:Math.max(1,width-1),points:normalizedPoints(arc),measure:label}
+      {id:ids[0]!,color,width,points:normalizedPoints(lerp(center,start,36))},
+      {id:ids[1]!,color,width,points:normalizedPoints(lerp(center,end,36))},
+      {id:ids[2]!,color:"#ffc14f",width:Math.max(1,width-1),points:normalizedPoints(arc),measure:label}
     ]);
+    requestLineNames("stroke",ids);
     setInfo("Protractor "+instrument.degrees.toFixed(0)+"° angle added to the board.");
   };
   const hasCenter=marks.some(mark=>mark.id==="center-axis-horizontal"||mark.id==="center-axis-vertical");
@@ -1047,6 +1054,7 @@ export function ClassroomApp(){
         {id:"center-axis-vertical",points:vertical,color,width:Math.max(2,width),
           surface:false,inside:true,kind:"line"},
       ]);
+      requestLineNames("mark",["center-axis-horizontal","center-axis-vertical"]);
       setInfo("Center added: horizontal E–W and vertical Zenith–Nadir lines intersect at the exact 3D origin (0,0,0).");
     }
   };
@@ -1074,8 +1082,10 @@ export function ClassroomApp(){
   const addCompassArc=(draw:CompassDrawing)=>{
     if(draw.points.length<2)return;
     snapshot();
-    setStrokes(old=>[...old,{id:makeId(),color,width,
+    const id=makeId();
+    setStrokes(old=>[...old,{id,color,width,
       points:draw.points.map(([x,y]):XY=>[x/stageSize[0],y/stageSize[1]])}]);
+    requestLineNames("stroke",[id]);
     setInfo("Compass circle / arc drawn accurately on the whiteboard.");
   };
   const clear=()=>{
