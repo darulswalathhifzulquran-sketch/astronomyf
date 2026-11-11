@@ -871,6 +871,109 @@ export function ClassroomApp(){
     }
     setJoinFrom(null);
   };
+  /** Hit test against saved teacher marks/ink, never the reference geometry.
+   * Called only for touch-down or desktop double click, not on every frame. */
+  const selectDrawnLine=(pixel:XY,touch:boolean):LinePick|null=>{
+    const [w,h]=stageSize,camera=cameraRef.current;
+    const candidates:DrawnLineCandidate[]=[];
+    for(const mark of marks){
+      if(!camera||mark.points.length<2)continue;
+      const step=Math.max(1,Math.ceil(mark.points.length/480));
+      const points=mark.points.filter((_,i)=>i%step===0||i===mark.points.length-1);
+      candidates.push({id:mark.id,kind:"mark",screen:points.map(p=>
+        !mark.surface||visiblePoint(p,camera,view,showSphere)?projectPoint(p,camera,w,h):null)});
+    }
+    for(const stroke of strokes){
+      if(stroke.points.length<2)continue;
+      const step=Math.max(1,Math.ceil(stroke.points.length/600));
+      const points=stroke.points.filter((_,i)=>i%step===0||i===stroke.points.length-1);
+      candidates.push({id:stroke.id,kind:"stroke",
+        screen:points.map(p=>[p[0]*w,p[1]*h] as XY)});
+    }
+    return pickDrawnLine(candidates,pixel,touch?25:17,touch?24:15);
+  };
+  /** Move line endpoint with full undo support for 2D + hollow/surface 3D.
+   * Free-space endpoints move in a plane through their old location, avoiding
+   * accidental snapping onto the outer shell. */
+  const moveEditAtPixel=(target:Edit,pixel:XY):boolean=>{
+    if(target.kind==="stroke"){
+      const next=normalizedFromPixel(pixel);
+      setStrokes(old=>old.map(stroke=>{
+        if(stroke.id!==target.id||stroke.points.length<2)return stroke;
+        const points=[...stroke.points];
+        const start=stroke.points[0]!,end=stroke.points[stroke.points.length-1]!;
+        // When the original stroke is straight, keep it straight rather than
+        // moving just one of its densely sampled vertices.
+        const straight=stroke.points.every(p=>screenDistance(p,start,end)<0.003);
+        if(straight){
+          const a=target.endpoint===0?next:start,b=target.endpoint===1?next:end;
+          return {...stroke,points:points.map((_,i):XY=>[
+            a[0]+(b[0]-a[0])*i/(points.length-1),
+            a[1]+(b[1]-a[1])*i/(points.length-1),
+          ])};
+        }
+        points[target.endpoint===0?0:points.length-1]=next;
+        return {...stroke,points};
+      }));
+      return true;
+    }
+    const mark=marks.find(line=>line.id===target.id);
+    if(!mark)return false;
+    let point:Vec|null=null;
+    if(mark.surface||Boolean(mark.anchorA&&mark.anchorB)){
+      point=sphereFromPixel(pixel);
+    }else{
+      const camera=cameraRef.current;
+      if(camera){
+        const old=mark.points[target.endpoint===0?0:mark.points.length-1]!;
+        const [w,h]=stageSize;
+        const ray=new THREE.Raycaster();
+        ray.setFromCamera(new THREE.Vector2(pixel[0]/w*2-1,1-pixel[1]/h*2),camera);
+        const plane=new THREE.Plane().setFromNormalAndCoplanarPoint(
+          camera.getWorldDirection(new THREE.Vector3()),new THREE.Vector3(...old));
+        const destination=ray.ray.intersectPlane(plane,new THREE.Vector3());
+        if(destination&&destination.length()<8)point=t(destination);
+      }
+    }
+    if(!point)return false;
+    moveEndpoint(target,point);
+    return true;
+  };
+  const beginEndpointEdit=(selection:LinePick)=>{
+    if(selection.endpoint===null)return;
+    setLineMenu(null);
+    setPending(null);setPendingScreen(null);setPendingVertices([]);setPendingScreenVertices([]);
+    setEdit({kind:selection.kind,id:selection.id,endpoint:selection.endpoint});
+    setInfo("Endpoint selected. Drag it to move, or tap a new destination. Undo restores the previous point.");
+  };
+  const openLineActions=(selection:LinePick,at:XY)=>{
+    setPending(null);setPendingScreen(null);setPendingVertices([]);setPendingScreenVertices([]);
+    setEdit(null);setLineMenu({selection,at});
+    setInfo("Selected a teacher-drawn line. Edit its label or delete it.");
+  };
+  const contextualLine=lineMenu?(lineMenu.selection.kind==="mark"
+    ?marks.find(line=>line.id===lineMenu.selection.id)
+    :strokes.find(line=>line.id===lineMenu.selection.id)):undefined;
+  const contextualEditLabel=()=>{
+    if(!lineMenu||!contextualLine)return;
+    setSelectedLineKey(lineMenu.selection.kind+":"+lineMenu.selection.id);
+    setNameDraft(contextualLine.name??"");
+    setNameTask({kind:lineMenu.selection.kind,ids:[lineMenu.selection.id],index:0,editing:true});
+    setLineMenu(null);
+  };
+  const contextualDelete=()=>{
+    if(!lineMenu||!contextualLine)return;
+    if(!window.confirm("Delete this drawn line"+(contextualLine.name?" ('"+contextualLine.name+"')":"")+"? You can Undo afterwards."))return;
+    snapshot();
+    if(lineMenu.selection.kind==="mark"){
+      setMarks(old=>old.filter(line=>line.id!==lineMenu.selection.id));
+    }else{
+      setStrokes(old=>old.filter(line=>line.id!==lineMenu.selection.id));
+    }
+    setSelectedLineKey("");
+    setLineMenu(null);setEdit(null);
+    setInfo("Line and its attached label deleted. Undo can restore them.");
+  };
   const screenDown=(e:ReactPointerEvent<HTMLElement>)=>{
     if((e.target as Element).closest(".classroom-instrument"))return;
     if(!e.isPrimary){gesture.current=null;return;}
