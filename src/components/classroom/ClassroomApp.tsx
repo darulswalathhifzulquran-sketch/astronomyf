@@ -13,7 +13,7 @@ import { ClassroomInstrument, type RulerPose, type AngleDrawing } from "./Classr
 import { ClassroomCompass, type CompassDrawing } from "./ClassroomCompass";
 import { ClassroomTextMesh, type TextAnnotation } from "./ClassroomTextMesh";
 import { newProjectId, readProjects, writeProjects, type SavedProject } from "./projectStorage";
-import { centerAxisPaths, interpolate2, interpolate3, nearestProjectedSegment } from "./joinGeometry";
+import { centerAxisPaths, interpolate2, interpolate3, nearestProjectedSegment, perspectiveCorrectRatio } from "./joinGeometry";
 import "./Classroom.css";
 import "./ClassroomEnhancements.css";
 
@@ -116,7 +116,8 @@ function visiblePoint(point:Vec,camera:THREE.Camera,view:View,shell:boolean):boo
   return !hit||camera.position.distanceTo(hit)>=length-0.026;
 }
 function projectedMarks(mark:Mark,camera:THREE.Camera,width:number,height:number,view:View,shell:boolean){
-  return mark.points.map(p=>visiblePoint(p,camera,view,shell)?projectPoint(p,camera,width,height):null);
+  return mark.points.map(p=>(!mark.surface||visiblePoint(p,camera,view,shell))
+    ?projectPoint(p,camera,width,height):null);
 }
 function markHit(mark:Mark,p:XY,camera:THREE.Camera,w:number,h:number,view:View,shell:boolean){
   const samples=projectedMarks(mark,camera,w,h,view,shell);
@@ -684,7 +685,10 @@ export function ClassroomApp(){
       if(!hit||hit.distance>nearest)return;
       const a=samples[hit.segmentIndex]!,b=samples[hit.segmentIndex+1]!;
       nearest=hit.distance;
-      best={id,type:"mark",position:interpolate3(a,b,hit.ratio)};
+      const depthA=Math.abs(new THREE.Vector3(...a).applyMatrix4(camera.matrixWorldInverse).z);
+      const depthB=Math.abs(new THREE.Vector3(...b).applyMatrix4(camera.matrixWorldInverse).z);
+      best={id,type:"mark",position:interpolate3(a,b,
+        perspectiveCorrectRatio(hit.ratio,depthA,depthB))};
     };
     // Drawn 3D paths: any segment between the endpoints is selectable.
     for(const mark of marks)test3D(mark.id,mark.points,mark.surface);
