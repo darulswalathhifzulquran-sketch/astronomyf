@@ -1536,7 +1536,7 @@ export function ClassroomApp(){
         <input id="classroom-line-name-input" ref={nameInputRef} type="text" dir="auto"
           maxLength={80} autoComplete="off" placeholder="e.g. مُعَدِّلُ النَّهَارِ"
           value={nameDraft} onChange={e=>setNameDraft(e.target.value)}/>
-        <div className="classroom-name-actions">
+        <div className="classroom-line-name-actions">
           <button type="button" className="classroom-name-skip" onClick={()=>finishLineName(false)}>
             {nameTask.editing?"Cancel":"Skip name · Finish"}
           </button>
