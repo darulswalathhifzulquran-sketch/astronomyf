@@ -210,31 +210,47 @@
  * The 3D label is an Html anchor at the physical midpoint of its line;
  * it moves with the line when the Classroom camera rotates. */
 .classroom-v2 .classroom-drawn-line-name {
-  display: block;
-  max-width: 190px;
-  padding: 3px 7px;
-  border-radius: 7px;
-  background: rgba(5,19,35,.72);
-  border: 1px solid rgba(180,223,255,.25);
+  /* Labels must always read horizontally. Never squeeze an Arabic/Malayalam
+     name into a narrow Html wrapper or paint a card behind it. */
+  display: inline-block;
+  width: max-content;
+  min-width: max-content;
+  max-width: none;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
   color: #f9fcff;
   font: 700 15px/1.5 "Amiri","Noto Naskh Arabic","IBM Plex Sans",sans-serif;
   text-align: center;
-  text-shadow: 0 1px 2px rgba(0,0,0,.8);
+  text-shadow: 0 1px 3px rgba(0,0,0,.94), 0 -1px 2px rgba(0,0,0,.75);
   pointer-events: none;
-  overflow-wrap: anywhere;
-  white-space: normal;
-  transform: translateY(-23px);
+  user-select: none;
+  white-space: nowrap !important;
+  word-break: keep-all !important;
+  overflow-wrap: normal !important;
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed;
+  unicode-bidi: isolate;
+  transform: translateY(-20px);
 }
 .classroom-v2 .classroom-ink-name {
   fill: #fff;
-  stroke: #07172b;
-  stroke-width: 3.8px;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+  stroke: rgba(0,0,0,.7);
+  stroke-width: 1.8px;
   paint-order: stroke fill;
   font: 700 16px/1.4 "Amiri","Noto Naskh Arabic","IBM Plex Sans",sans-serif;
   pointer-events: none;
   user-select: none;
+  white-space: pre;
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed;
+  word-break: keep-all;
+  background: transparent;
 }
 .classroom-v2 .classroom-line-name-section .classroom-project-actions {
   grid-template-columns: repeat(2,minmax(0,1fr));
@@ -340,9 +356,11 @@
 }
 @media (max-width: 620px) {
   .classroom-v2 .classroom-drawn-line-name {
-    max-width: 135px;
+    max-width: none;
+    min-width: max-content;
     font-size: 12px;
-    padding: 2px 5px;
+    padding: 0;
+    white-space: nowrap !important;
   }
   .classroom-v2 .classroom-ink-name { font-size: 13px; }
   .classroom-v2 .classroom-name-dialog { border-radius: 16px; gap: 9px; }
@@ -472,4 +490,26 @@
     font-size: 10px;
     max-width: calc(100vw - 15px);
   }
+}
+
+/* Ruler/angle measurement text is also plain annotation, not a floating box. */
+.classroom-root.classroom-v2 .classroom-measure-label {
+  display: inline-block;
+  width: max-content;
+  min-width: max-content;
+  max-width: none;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  color: #fff3ae;
+  text-shadow: 0 1px 3px rgba(0,0,0,.95);
+  white-space: nowrap !important;
+  writing-mode: horizontal-tb !important;
+  overflow-wrap: normal !important;
+  word-break: keep-all !important;
 }

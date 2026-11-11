@@ -341,10 +341,13 @@ function MarkLine({mark,view,showSphere,edit}:{mark:Mark;view:View;showSphere:bo
       opacity={1} transparent depthTest={mark.surface&&showSphere&&view==="outside"}
       depthWrite={false} raycast={()=>null}/>
     {namePoint&&mark.name&&<Html position={new THREE.Vector3(...namePoint)} center
-      zIndexRange={[9,0]} style={{pointerEvents:"none"}}>
+      zIndexRange={[9,0]}
+      style={{pointerEvents:"none",width:"max-content",minWidth:"max-content",
+        whiteSpace:"nowrap",background:"transparent"}}>
       <span className="classroom-drawn-line-name" dir="auto" title={mark.name}>{mark.name}</span>
     </Html>}
-    {mark.measure&&<Html position={new THREE.Vector3(...midpoint)} center style={{pointerEvents:"none"}}>
+    {mark.measure&&<Html position={new THREE.Vector3(...midpoint)} center
+      style={{pointerEvents:"none",width:"max-content",whiteSpace:"nowrap",background:"transparent"}}>
       <span className="classroom-measure-label">{mark.measure}</span>
     </Html>}
     {edit?.kind==="mark"&&edit.id===mark.id&&!mark.anchorA&&
