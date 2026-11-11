@@ -1004,7 +1004,7 @@ export function ClassroomApp(){
         gl={{alpha:true,antialias:true}} camera={{position:[0,0,3.25],fov:45,near:0.002,far:80}}
         onCreated={({camera})=>{cameraRef.current=camera;}}>
         <Sphere visible={visible} zenith={zenith} nadir={nadir} directions={directions} seasons={seasons}
-          marks={marks} pending={pending} tool={tool} color={color} view={view} cmd={cmd}
+          marks={marks} texts={texts} pending={pending} tool={tool} color={color} view={view} cmd={cmd}
           showSphere={showSphere} showNames={showNames} edit={edit} draft={hollowPenDraft} onPoint={onPoint} onBeginEdit={onBeginEdit}/>
       </Canvas>
       <svg className="classroom-ink-layer" width="100%" height="100%"
@@ -1016,6 +1016,8 @@ export function ClassroomApp(){
           {line.measure&&<text x={line.measure.x*stageSize[0]} y={line.measure.y*stageSize[1]-11}
             fill="#fff1ae" fontSize={14} fontWeight="700" textAnchor="middle">{line.measure.label}</text>}
         </g>)}
+        {selectedJoinPoint&&<circle cx={selectedJoinPoint[0]} cy={selectedJoinPoint[1]}
+          r={12} fill="rgba(255,211,96,.3)" stroke="#ffd260" strokeWidth={3}/>}
         {pendingScreen&&<circle cx={pendingScreen[0]*stageSize[0]} cy={pendingScreen[1]*stageSize[1]} r={7}
           stroke={color} strokeWidth={2} fill="none"/>}
         {pendingScreenVertices.map((p,i)=><circle key={i} cx={p[0]*stageSize[0]} cy={p[1]*stageSize[1]}
@@ -1033,11 +1035,14 @@ export function ClassroomApp(){
       <ToolButton active={tool==="eraser"} onClick={()=>chooseTool(tool==="eraser"?"orbit":"eraser")} label="Eraser"><Eraser size={22}/>Eraser</ToolButton>
       <ToolButton active={tool==="orbit"} onClick={()=>chooseTool("orbit")} label="Select and rotate sphere"><MousePointer2 size={22}/>Select</ToolButton>
       <ToolButton active={tool==="line"} onClick={()=>chooseTool(tool==="line"?"orbit":"line")} label="Straight line"><Slash size={22}/>Line</ToolButton>
+      <ToolButton active={tool==="join"} onClick={()=>chooseTool(tool==="join"?"orbit":"join")} label="Join existing line endpoints"><Link2 size={22}/>Join</ToolButton>
+      <ToolButton active={tool==="text3d"} onClick={()=>chooseTool(tool==="text3d"?"orbit":"text3d")} label="Place 3D text"><Type size={22}/>3D Text</ToolButton>
       <ToolButton active={tool==="triangle"} onClick={()=>chooseTool(tool==="triangle"?"orbit":"triangle")} label="Shape triangle"><Triangle size={22}/>Shape</ToolButton>
       <button type="button" className={"classroom-toolbar-icon"+(mobilePanel==="tools"?" is-active":"")}
         aria-label="Show or hide tool settings" aria-expanded={mobilePanel==="tools"}
         onClick={()=>setMobilePanel(p=>p==="tools"?"none":"tools")}><Settings2 size={22}/><small>Toolbox</small></button>
-      <button type="button" className="classroom-toolbar-icon" aria-label="Undo" disabled={!history.length&&!pending&&!pendingScreen}
+      <button type="button" className="classroom-toolbar-icon" aria-label="Save classroom project" onClick={()=>saveProject()}><Save size={22}/><small>Save</small></button>
+      <button type="button" className="classroom-toolbar-icon" aria-label="Undo" disabled={!history.length&&!pending&&!pendingScreen&&!joinFrom}
         onClick={undo}><Undo2 size={22}/><small>Undo</small></button>
       <button type="button" className="classroom-toolbar-icon" aria-label="Redo" disabled={!future.length}
         onClick={redo}><Redo2 size={22}/><small>Redo</small></button>
@@ -1052,27 +1057,45 @@ export function ClassroomApp(){
         onClick={()=>setCompassVisible(v=>!v)}><Compass size={22}/><small>Compass</small></button>
       <button type="button" className="classroom-toolbar-icon" aria-label="Toggle inside or outside view"
         onClick={()=>{setView(v=>v==="inside"?"outside":"inside");setPending(null);}}><Eye size={22}/><small>{view==="inside"?"Inside":"Outside"}</small></button>
-      {(pending||pendingScreen||pendingVertices.length>0||pendingScreenVertices.length>0)&&
+      {(pending||pendingScreen||joinFrom||pendingVertices.length>0||pendingScreenVertices.length>0)&&
         <button type="button" className="classroom-toolbar-icon classroom-toolbar-cancel" aria-label="Cancel current drawing"
-          onClick={()=>{setPending(null);setPendingScreen(null);setPendingVertices([]);setPendingScreenVertices([]);}}>
+          onClick={()=>{setPending(null);setPendingScreen(null);setJoinFrom(null);setPendingVertices([]);setPendingScreenVertices([]);}}>
           <X size={22}/><small>Cancel</small>
         </button>}
     </nav>
-    <aside className="classroom-layers classroom-glass" aria-label="Great circle controls">
-      <div className="classroom-panel-head"><div><span className="classroom-overline">GEOMETRY</span><h2 dir="rtl">الدَّوَائِرُ الْعِظَامُ</h2><p>10 Great Circles</p></div>
+    <aside className="classroom-layers classroom-glass" aria-label="Celestial circles and arcs controls">
+      <div className="classroom-panel-head"><div><span className="classroom-overline">GEOMETRY</span><h2 dir="rtl">الدَّوَائِرُ الْعِظَامُ وَالْقِسِيُّ</h2><p>10 Great Circles · 3 Small Circles · 17 Arcs</p></div>
         <div className="classroom-name-actions">
           <button className="classroom-tiny" aria-pressed={showNames}
             onClick={()=>setShowNames(x=>!x)}>{showNames?"Hide names":"Show names"}</button>
-          <button className="classroom-tiny" onClick={()=>setVisible(visible.length===GREAT.length?[]:GREAT.map(l=>l.id))}>{visible.length===GREAT.length?"Hide all":"Show all"}</button>
+          <button className="classroom-tiny" onClick={()=>setVisible(GEOMETRY.filter(l=>l.status!=="review"||l.num===9).every(l=>visible.includes(l.id))?[]:GEOMETRY.filter(l=>l.status!=="review"||l.num===9).map(l=>l.id))}>{GEOMETRY.filter(l=>l.status!=="review"||l.num===9).every(l=>visible.includes(l.id))?"Hide all":"Show all"}</button>
         </div></div>
-      <div className="classroom-circle-list">{GREAT.map(l=><label key={l.id} className={"classroom-circle-row"+(visible.includes(l.id)?" active":"")}>
+      <div className="classroom-circle-list"><h3 className="classroom-geometry-subhead">10 Great Circles</h3>{GREAT.map(l=><label key={l.id} className={"classroom-circle-row"+(visible.includes(l.id)?" active":"")}>
         <input type="checkbox" checked={visible.includes(l.id)}
           onChange={()=>setVisible(old=>old.includes(l.id)?old.filter(id=>id!==l.id):[...old,l.id])}/>
         <span className="classroom-circle-color" style={{background:l.color}}/>
         <span className="classroom-circle-label"><strong dir="rtl">{l.ar}</strong><small>{l.en}{l.num===9?" · Schematic":""}</small></span>
         <span className="classroom-circle-check">{visible.includes(l.id)&&<Check size={14}/>}</span>
-      </label>)}</div>
-      <p className="classroom-source-note">Circle 9 is a teaching schematic; its historical definition is under review.</p>
+      </label>)}
+        <h3 className="classroom-geometry-subhead">3 Small Circles · الدَّوَائِرُ الصِّغَارُ</h3>
+        {SMALL.map(l=><label key={l.id} className={"classroom-circle-row"+(visible.includes(l.id)?" active":"")}>
+          <input type="checkbox" checked={visible.includes(l.id)}
+            onChange={()=>setVisible(old=>old.includes(l.id)?old.filter(id=>id!==l.id):[...old,l.id])}/>
+          <span className="classroom-circle-color" style={{background:l.color}}/>
+          <span className="classroom-circle-label"><strong dir="rtl">{l.ar}</strong><small>{l.en}</small></span>
+          <span className="classroom-circle-check">{visible.includes(l.id)&&<Check size={14}/>}</span>
+        </label>)}
+        <h3 className="classroom-geometry-subhead">17 Angular Arcs · الْقِسِيُّ</h3>
+        {ARCS.map(l=><label key={l.id} title={l.status==="review"?l.def:l.en}
+          className={"classroom-circle-row"+(visible.includes(l.id)?" active":"")+(l.status==="review"?" is-unverified":"")}>
+          <input type="checkbox" checked={visible.includes(l.id)} disabled={l.status==="review"}
+            onChange={()=>setVisible(old=>old.includes(l.id)?old.filter(id=>id!==l.id):[...old,l.id])}/>
+          <span className="classroom-circle-color" style={{background:l.color}}/>
+          <span className="classroom-circle-label"><strong dir="rtl">{l.ar}</strong>
+            <small>{l.en}{l.status==="review"?" · Awaiting source verification":""}</small></span>
+          <span className="classroom-circle-check">{visible.includes(l.id)&&<Check size={14}/>}</span>
+        </label>)}</div>
+      <p className="classroom-source-note">Circle 9 is schematic. Arcs needing primary-source verification are listed but cannot yet be enabled.</p>
     </aside>
     <aside className="classroom-tools classroom-glass" aria-label="Whiteboard drawing tools">
       <div className="classroom-panel-head"><div><span className="classroom-overline">YOUR WORKSPACE</span>
@@ -1165,8 +1188,8 @@ export function ClassroomApp(){
       </div>
       <div className="classroom-actions">
         <button onClick={undo} disabled={!edit&&!pending&&!pendingScreen&&!pendingVertices.length&&!pendingScreenVertices.length&&!history.length}><Undo2 size={15}/> Undo</button>
-        <button onClick={clear} disabled={!pending&&!pendingScreen&&!pendingVertices.length&&!pendingScreenVertices.length&&marks.length===0&&strokes.length===0}><Eraser size={15}/> Clear</button>
-        <button onClick={()=>{setMarks([]);setStrokes([]);setHistory([]);setFuture([]);setCompassVisible(false);setPending(null);setPendingScreen(null);setPendingVertices([]);setPendingScreenVertices([]);setEdit(null);setShowSphere(true);setShowNames(true);setRulerVisible(false);setProtractorVisible(false);setVisible(DEFAULT_VISIBLE);setSeasons(SEASONS.map(s=>s.longitude));setZenith(true);setNadir(true);setDirections(true);setView("outside");setCmd(old=>({number:old.number+1,dir:[0,0,1]}));setShape(true);chooseTool("orbit");}}><RotateCcw size={15}/> Reset</button>
+        <button onClick={clear} disabled={!pending&&!pendingScreen&&!pendingVertices.length&&!pendingScreenVertices.length&&marks.length===0&&strokes.length===0&&texts.length===0}><Eraser size={15}/> Clear</button>
+        <button onClick={()=>{setMarks([]);setStrokes([]);setTexts([]);setJoinFrom(null);setHistory([]);setFuture([]);setCompassVisible(false);setPending(null);setPendingScreen(null);setPendingVertices([]);setPendingScreenVertices([]);setEdit(null);setShowSphere(true);setShowNames(true);setRulerVisible(false);setProtractorVisible(false);setVisible(DEFAULT_VISIBLE);setSeasons(SEASONS.map(s=>s.longitude));setZenith(true);setNadir(true);setDirections(true);setView("outside");setCmd(old=>({number:old.number+1,dir:[0,0,1]}));setShape(true);chooseTool("orbit");}}><RotateCcw size={15}/> Reset</button>
       </div>
     </aside>
     <div className="classroom-screenreader-status" role="status" aria-live="polite">{info}</div>
