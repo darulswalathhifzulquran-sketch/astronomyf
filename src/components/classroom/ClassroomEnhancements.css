@@ -54,3 +54,18 @@
   .classroom-v2 .classroom-project-actions { gap: 4px; }
   .classroom-v2 .classroom-project-actions button { font-size: 9px; }
 }
+
+.classroom-v2 .classroom-action-status {
+  position: absolute; bottom: 111px; left: 50%; transform: translateX(-50%);
+  z-index: 10; max-width: min(580px,calc(100vw - 24px)); width: max-content;
+  border-radius: 12px; padding: 9px 14px; pointer-events: none;
+  background: rgba(9,31,57,.84); border: 1px solid rgba(155,205,255,.4);
+  color: #f7fbff; font: 600 11px/1.5 "IBM Plex Sans",Arial,sans-serif;
+  text-align: center; backdrop-filter: blur(14px);
+}
+@media(max-width:1100px) {
+  .classroom-v2 .classroom-action-status { bottom: 92px; font-size: 10px; }
+}
+@media(max-width:620px) {
+  .classroom-v2 .classroom-action-status { bottom: 81px; font-size: 10px; }
+}
