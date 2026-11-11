@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Html, Line, OrbitControls } from "@react-three/drei";
 import { Link } from "@tanstack/react-router";
 import * as THREE from "three";
 import type { OrbitControls as OrbitImpl } from "three-stdlib";
-import { ArrowLeft, Check, Compass, Eraser, Eye, EyeOff, Maximize2, MousePointer2, Palette, PenLine, RotateCcw, Ruler, Slash, Undo2, X, Shapes, Triangle, DraftingCompass, Redo2, Settings2, Save, FolderOpen, FilePlus2, FileDown, FileUp, Link2, Type, Trash2, Pencil } from "lucide-react";
+import { ArrowLeft, Check, Compass, Eraser, Eye, EyeOff, Maximize2, MousePointer2, Palette, PenLine, RotateCcw, Ruler, Slash, Undo2, X, Shapes, Triangle, DraftingCompass, Redo2, Settings2, Gauge, Save, FolderOpen, FilePlus2, FileDown, FileUp, Link2, Type, Trash2, Pencil } from "lucide-react";
 import { LAYERS, type LayerDef } from "@/data/layers";
 import { buildLayer } from "@/lib/astronomy/layerGeometry";
 import { computeSky } from "@/lib/astronomy/sky";
@@ -25,6 +25,7 @@ type Mark = {id:string;points:Vec[];color:string;width:number;surface:boolean;in
 type Stroke = {id:string;points:XY[];color:string;width:number;measure?:{x:number;y:number;label:string}};
 type Snapshot = {marks:Mark[];strokes:Stroke[];texts:TextAnnotation[]};
 type JoinEndpoint = {id:string;type:"mark";position:Vec} | {id:string;type:"stroke";position:XY};
+type GeometryEntry = {layer:LayerDef;lines:THREE.Vector3[][];label:THREE.Vector3|undefined};
 type ProjectData = {
   visible:string[]; zenith:boolean; nadir:boolean; directions:boolean; seasons:number[];
   showSphere:boolean; showNames:boolean; view:View; shape:boolean; placement:Place;
@@ -214,12 +215,16 @@ function Tag({p,ar,en,color,view,showSphere}:{p:THREE.Vector3;ar:string;en?:stri
   const delta=useMemo(()=>new THREE.Vector3(),[]);
   useFrame(({camera})=>{
     if(!label.current)return;
-    if(!showSphere||view==="inside"){label.current.style.visibility="visible";return;}
+    if(!showSphere||view==="inside"){
+      if(label.current.style.visibility!=="visible")label.current.style.visibility="visible";
+      return;
+    }
     delta.copy(p).sub(camera.position);
     const a=delta.lengthSq(),b=2*camera.position.dot(delta),c=camera.position.lengthSq()-0.997*0.997;
     const discriminant=b*b-4*a*c;
     const near=discriminant>0?(-b-Math.sqrt(discriminant))/(2*a):2;
-    label.current.style.visibility=c>0&&near>0.0001&&near<0.999?"hidden":"visible";
+    const visibility=c>0&&near>0.0001&&near<0.999?"hidden":"visible";
+    if(label.current.style.visibility!==visibility)label.current.style.visibility=visibility;
   });
   return <Html position={p} center style={{pointerEvents:"none"}} zIndexRange={[4,0]}>
     <div ref={label} className="classroom-space-label" style={{color}}>
@@ -243,16 +248,14 @@ function CircleName({layer,lines,index,view}:{
   const group=useRef<THREE.Group>(null);
   const element=useRef<HTMLDivElement>(null);
   const sample=useMemo(()=>new THREE.Vector3(),[]);
-  const frameCount=useRef(0);
   useFrame(({camera})=>{
     if(!group.current||!element.current)return;
-    // Avoid heavy layout or projection work on every rendered frame.
-    if(++frameCount.current%8!==1)return;
+    // Demand-driven frames can be sparse; always update the label when camera moves.
     const [targetX,targetY]=LABEL_TARGETS[index]??[0,0];
     let bestPoint:THREE.Vector3|null=null;
     let bestScore=Number.POSITIVE_INFINITY;
     for(const pts of lines){
-      for(let i=0;i<pts.length;i+=Math.max(1,Math.floor(pts.length/90))){
+      for(let i=0;i<pts.length;i+=Math.max(1,Math.floor(pts.length/40))){
         const point=pts[i]!;
         if(view==="outside"&&point.dot(camera.position)<0.18)continue;
         sample.copy(point).multiplyScalar(view==="inside"?0.978:1.055).project(camera);
@@ -261,9 +264,11 @@ function CircleName({layer,lines,index,view}:{
         if(score<bestScore){bestScore=score;bestPoint=point;}
       }
     }
-    element.current.style.visibility=bestPoint?"visible":"hidden";
+    const visibility=bestPoint?"visible":"hidden";
+    if(element.current.style.visibility!==visibility)element.current.style.visibility=visibility;
     if(bestPoint){
-      group.current.position.copy(bestPoint).normalize().multiplyScalar(view==="inside"?0.987:1.025);
+      const destination=bestPoint.clone().normalize().multiplyScalar(view==="inside"?0.987:1.025);
+      if(group.current.position.distanceToSquared(destination)>0.000001)group.current.position.copy(destination);
     }
   });
   return <group ref={group}>
@@ -276,6 +281,28 @@ function CircleName({layer,lines,index,view}:{
   </group>;
 }
 
+const ClassroomGeometryLayer=memo(function ClassroomGeometryLayer({
+  entry,view,showSphere,showNames,lite
+}:{
+  entry:GeometryEntry;view:View;showSphere:boolean;showNames:boolean;lite:boolean
+}){
+  const {layer,lines,label}=entry;
+  const sampled=useMemo(()=>lines.map(pts=>{
+    const step=lite?Math.max(1,Math.ceil(pts.length/96)):1;
+    return pts.filter((_,index)=>index%step===0||index===pts.length-1)
+      .map(point=>point.clone().multiplyScalar(1.008));
+  }),[lines,lite]);
+  return <group>
+    {sampled.map((pts,i)=>pts.length>=2&&<Line key={i} points={pts}
+      color={layer.color} lineWidth={layer.num<=2?3.2:2.2}
+      transparent opacity={0.98} depthTest={showSphere&&view==="outside"}
+      depthWrite={false} raycast={()=>null}/>)}
+    {showNames&&lines.length>0&&(layer.group==="great"
+      ?<CircleName layer={layer} lines={lines} index={layer.num-1} view={view}/>
+      :!lite&&label&&<Tag p={label.clone().normalize().multiplyScalar(1.12)}
+        ar={layer.ar} en={layer.en} color={layer.color} view={view} showSphere={showSphere}/>)}
+  </group>;
+});
 function ClassroomCamera({view,cmd,enabled}:{view:View;cmd:CameraCmd;enabled:boolean}){
   const {camera}=useThree();
   const controls=useRef<OrbitImpl>(null);
@@ -321,23 +348,17 @@ function MarkLine({mark,view,showSphere,edit,onBeginEdit}:{mark:Mark;view:View;s
     })}
   </group>;
 }
-function Sphere({visible,zenith,nadir,directions,seasons,marks,texts,pending,tool,color,view,cmd,showSphere,showNames,edit,draft,onPoint,onBeginEdit}:{
- visible:string[];zenith:boolean;nadir:boolean;directions:boolean;seasons:number[];
+function Sphere({geometry,sky,lite,zenith,nadir,directions,seasons,marks,texts,pending,tool,color,view,cmd,showSphere,showNames,edit,draft,onBeginEdit}:{
+ geometry:GeometryEntry[];sky:ReturnType<typeof computeSky>;lite:boolean;
+ zenith:boolean;nadir:boolean;directions:boolean;seasons:number[];
  marks:Mark[];texts:TextAnnotation[];pending:Vec|null;tool:Tool;color:string;view:View;cmd:CameraCmd;showSphere:boolean;showNames:boolean;
- edit:Edit|null;draft:Vec[];onPoint:(p:Vec)=>void;onBeginEdit:(id:string,endpoint:0|1)=>void;
+ edit:Edit|null;draft:Vec[];onBeginEdit:(id:string,endpoint:0|1)=>void;
 }){
-  const sky=useMemo(()=>computeSky(SKY_DATE,0,75.8),[]);
-  const geometry=useMemo(()=>GEOMETRY.map(layer=>{
-    const geom=buildLayer(layer.id,sky);
-    // Circle 9 remains explicitly schematic pending primary-source verification.
-    const lines=geom.lines.length?geom.lines:layer.num===9?[greatCircle(planeNormal(sky.K,V(0,1,0)))]:[];
-    return {layer,lines,label:geom.label};
-  }),[sky]);
   // All tool positions are resolved once from stage-relative pointer coordinates.
   // The invisible sphere is visual-only here; stage handles click raycasting.
   return <>
     <ambientLight intensity={0.9}/>
-    <ClassroomCamera view={view} cmd={cmd} enabled={tool!=="eraser"&&tool!=="join"&&!edit}/>
+    <ClassroomCamera view={view} cmd={cmd} enabled={tool==="orbit"&&!edit}/>
     {showSphere&&view==="outside"&&<mesh renderOrder={-1} raycast={()=>null}>
       <sphereGeometry args={[0.997,72,56]}/><meshBasicMaterial colorWrite={false} depthWrite/>
     </mesh>}
@@ -352,15 +373,8 @@ function Sphere({visible,zenith,nadir,directions,seasons,marks,texts,pending,too
       <mesh scale={1.001} raycast={()=>null}><sphereGeometry args={[1,32,24]}/>
         <meshBasicMaterial side={THREE.DoubleSide} color="#80a7cf" wireframe transparent opacity={0.07} depthWrite={false}/></mesh>
     </>}
-    {geometry.filter(({layer})=>visible.includes(layer.id)).map(({layer,lines,label})=><group key={layer.id}>
-      {lines.map((pts,i)=><Line key={i} points={pts.map(p=>p.clone().multiplyScalar(1.008))}
-        color={layer.color} lineWidth={layer.num<=2?3.2:2.2}
-        transparent opacity={0.98} depthTest={showSphere&&view==="outside"} depthWrite={false} raycast={()=>null}/>)}
-      {showNames&&lines.length>0&&(layer.group==="great"
-         ?<CircleName layer={layer} lines={lines} index={layer.num-1} view={view}/>
-         :label&&<Tag p={label.clone().normalize().multiplyScalar(1.12)} ar={layer.ar} en={layer.en}
-           color={layer.color} view={view} showSphere={showSphere}/>)}
-    </group>)}
+    {geometry.map(entry=><ClassroomGeometryLayer key={entry.layer.id} entry={entry}
+      view={view} showSphere={showSphere} showNames={showNames} lite={lite}/>)}
     {directions&&([
       [V(0,0,-1.16),"N","North"],[V(0,0,1.16),"S","South"],
       [V(1.16,0,0),"E","East"],[V(-1.16,0,0),"W","West"]
@@ -396,6 +410,9 @@ export function ClassroomApp(){
   const [seasons,setSeasons]=useState<number[]>(SEASONS.map(s=>s.longitude));
   const [showSphere,setShowSphere]=useState(true);
   const [showNames,setShowNames]=useState(true);
+  // Android and other touch devices start in economical WebGL rendering mode.
+  const [lite,setLite]=useState(()=>typeof window!=="undefined" &&
+    window.matchMedia("(pointer: coarse), (max-width: 900px)").matches);
   const [tool,setTool]=useState<Tool>("orbit");
   const [shape,setShape]=useState(true);
   const [view,setView]=useState<View>("outside");
@@ -632,14 +649,16 @@ export function ClassroomApp(){
       setInfo(tool==="triangle"?"Straight triangle completed.":"Measured angle: "+planarAngle(b,a,c).toFixed(1)+"°");
     }
   };
-  const teachingGeometry=useMemo(()=>{
-    const sky=computeSky(SKY_DATE,0,75.8);
-    return GEOMETRY.map(layer=>{
-      const geometry=buildLayer(layer.id,sky);
-      const lines=geometry.lines.length?geometry.lines:layer.num===9?[greatCircle(planeNormal(sky.K,V(0,1,0)))]:[];
-      return {layer,lines};
-    });
-  },[]);
+  // Shared by the scene and Join tool: compute only visible geometry once.
+  const classroomSky=useMemo(()=>computeSky(SKY_DATE,0,75.8),[]);
+  const teachingGeometry=useMemo<GeometryEntry[]>(()=>GEOMETRY
+    .filter(layer=>visible.includes(layer.id))
+    .map(layer=>{
+      const geometry=buildLayer(layer.id,classroomSky);
+      const lines=geometry.lines.length?geometry.lines:
+        layer.num===9?[greatCircle(planeNormal(classroomSky.K,V(0,1,0)))]:[];
+      return {layer,lines,label:geometry.label};
+    }),[classroomSky,visible]);
   const joinAt=(pixel:XY)=>{
     const camera=cameraRef.current;
     if(!camera){setInfo("The 3D scene is still initializing.");return;}
@@ -664,7 +683,6 @@ export function ClassroomApp(){
     }
     // Astronomical circles have no endpoints: select any visible point on a circle/arc.
     for(const {layer,lines} of teachingGeometry){
-      if(!visible.includes(layer.id))continue;
       for(const line of lines){
         for(let i=1;i<line.length;i++){
           const a=t(line[i-1]!.clone().multiplyScalar(1.008));
@@ -745,7 +763,11 @@ export function ClassroomApp(){
   };
   const screenMove=(e:ReactPointerEvent<HTMLElement>)=>{
     const p=pixelFromClient(e.clientX,e.clientY);
-    if(tool==="eraser")setEraserCursor(normalizedFromPixel(p));
+    if(tool==="eraser")setEraserCursor(previous=>{
+      const next=normalizedFromPixel(p);
+      return previous&&dist2([previous[0]*stageSize[0],previous[1]*stageSize[1]],p)<5
+        ?previous:next;
+    });
     const g=gesture.current;
     if(!g||g.pointer!==e.pointerId)return;
     const movement=Math.hypot(p[0]-g.startX,p[1]-g.startY);
@@ -1028,12 +1050,15 @@ export function ClassroomApp(){
       onPointerDownCapture={screenDown} onPointerMoveCapture={screenMove} onPointerUpCapture={screenUp}
       onPointerCancelCapture={screenUp} onDoubleClickCapture={screenDoubleClick}
       onPointerLeave={()=>setEraserCursor(null)}>
-      <Canvas className="classroom-canvas" dpr={[1,1.7]}
-        gl={{alpha:true,antialias:true}} camera={{position:[0,0,3.25],fov:45,near:0.002,far:80}}
+      <Canvas className="classroom-canvas" frameloop="demand" dpr={lite?1:[1,1.6]}
+        gl={{alpha:true,antialias:!lite,powerPreference:lite?"low-power":"high-performance"}}
+        camera={{position:[0,0,3.25],fov:45,near:0.002,far:80}}
         onCreated={({camera})=>{cameraRef.current=camera;}}>
-        <Sphere visible={visible} zenith={zenith} nadir={nadir} directions={directions} seasons={seasons}
+        <Sphere geometry={teachingGeometry} sky={classroomSky} lite={lite}
+          zenith={zenith} nadir={nadir} directions={directions} seasons={seasons}
           marks={marks} texts={texts} pending={pending} tool={tool} color={color} view={view} cmd={cmd}
-          showSphere={showSphere} showNames={showNames} edit={edit} draft={hollowPenDraft} onPoint={onPoint} onBeginEdit={onBeginEdit}/>
+          showSphere={showSphere} showNames={showNames} edit={edit} draft={hollowPenDraft}
+          onBeginEdit={onBeginEdit}/>
       </Canvas>
       <svg className="classroom-ink-layer" width="100%" height="100%"
         viewBox={"0 0 "+stageSize[0]+" "+stageSize[1]} preserveAspectRatio="none"
@@ -1128,6 +1153,17 @@ export function ClassroomApp(){
     <aside className="classroom-tools classroom-glass" aria-label="Whiteboard drawing tools">
       <div className="classroom-panel-head"><div><span className="classroom-overline">YOUR WORKSPACE</span>
         <h2 className="classroom-tool-heading">Teaching tools</h2><p>Sketch · Measure · Explain</p></div><PenLine size={19}/></div>
+      <div className="classroom-tool-section classroom-performance-section">
+        <div className="classroom-section-title"><Gauge size={15}/> Android performance</div>
+        <button className={"classroom-feature-action"+(lite?" on":"")}
+          type="button" aria-pressed={lite} onClick={()=>setLite(value=>!value)}>
+          <Gauge size={16}/> {lite?"Lite mode ON · tap for high detail":"High detail ON · tap for Lite mode"}
+        </button>
+        <p className="classroom-hint">Lite mode reduces GPU pixel density, disables
+          costly antialiasing and extra arc labels. All geometry and drawing tools
+          remain usable. Use Select to rotate the sphere; other tools now capture
+          touches without accidentally rotating it.</p>
+      </div>
       <div className="classroom-tool-section classroom-project-section">
         <div className="classroom-section-title"><Save size={15}/> Classroom projects</div>
         <label className="classroom-project-label">Project name

@@ -2,8 +2,9 @@ name: Classroom CI
 on:
   push:
     branches:
-      - feature/classroom-arcs-projects-join-3dtext
       - main
+      - 'feature/**'
+      - 'fix/**'
   pull_request:
     branches:
       - main

@@ -69,3 +69,124 @@
 @media(max-width:620px) {
   .classroom-v2 .classroom-action-status { bottom: 81px; font-size: 10px; }
 }
+
+
+/* ===== Sidebar visibility and mobile GPU regression fix (2026-11) =====
+ * A translucent blurred panel on top of a continuously repainting WebGL
+ * canvas can paint its glass backdrop while dropping its scrolling children
+ * on Android Chrome and some desktop GPUs. Render the panel independently,
+ * without a live GPU backdrop-filter, with explicit opaque contrast.
+ */
+.classroom-root.classroom-v2 .classroom-layers {
+  isolation: isolate;
+  background: linear-gradient(145deg,#f1f7fe 0%,#dfeaf7 55%,#c7d9ed 100%) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  color: #19334e !important;
+  overflow: hidden !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  min-height: 0;
+  contain: layout style;
+}
+.classroom-root.classroom-v2 .classroom-layers > * {
+  position: relative;
+  z-index: 1;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+.classroom-root.classroom-v2 .classroom-layers .classroom-panel-head {
+  flex: 0 0 auto;
+  min-height: min-content;
+  align-items: flex-start;
+  color: #1b3556;
+}
+.classroom-root.classroom-v2 .classroom-layers .classroom-panel-head h2,
+.classroom-root.classroom-v2 .classroom-layers .classroom-panel-head p,
+.classroom-root.classroom-v2 .classroom-layers .classroom-overline,
+.classroom-root.classroom-v2 .classroom-layers .classroom-geometry-subhead,
+.classroom-root.classroom-v2 .classroom-layers .classroom-circle-label strong,
+.classroom-root.classroom-v2 .classroom-layers .classroom-circle-label small,
+.classroom-root.classroom-v2 .classroom-layers .classroom-source-note {
+  visibility: visible;
+}
+.classroom-root.classroom-v2 .classroom-layers .classroom-panel-head h2,
+.classroom-root.classroom-v2 .classroom-layers .classroom-circle-label strong { color: #193957; }
+.classroom-root.classroom-v2 .classroom-layers .classroom-panel-head p,
+.classroom-root.classroom-v2 .classroom-layers .classroom-circle-label small { color: #486684; }
+.classroom-root.classroom-v2 .classroom-layers .classroom-geometry-subhead { color: #27537e; }
+.classroom-root.classroom-v2 .classroom-layers .classroom-circle-list {
+  flex: 1 1 auto;
+  display: flex !important;
+  min-height: 100px;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+.classroom-root.classroom-v2 .classroom-layers .classroom-circle-row {
+  flex: 0 0 auto;
+  min-height: 49px;
+  background-clip: padding-box;
+}
+.classroom-root.classroom-v2 .classroom-layers .classroom-source-note {
+  flex: 0 0 auto;
+  color: #536c88;
+}
+.classroom-root.classroom-v2 .classroom-tools {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  background: #102238 !important;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.classroom-root.classroom-v2 .classroom-tools .classroom-project-label { color: #f1f7ff; }
+.classroom-root.classroom-v2 .classroom-tools .classroom-project-label input,
+.classroom-root.classroom-v2 .classroom-tools .classroom-project-label select {
+  color: #183551; background: #f5f9ff;
+}
+@media (max-width: 1100px) {
+  .classroom-root.classroom-v2 .classroom-layers,
+  .classroom-root.classroom-v2 .classroom-tools {
+    top: 74px !important;
+    bottom: calc(92px + env(safe-area-inset-bottom)) !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    height: auto !important;
+    width: min(370px, calc(100vw - 16px)) !important;
+    right: 8px !important;
+    left: auto !important;
+    border-radius: 17px !important;
+  }
+  .classroom-root.classroom-v2[data-panel="none"] .classroom-layers,
+  .classroom-root.classroom-v2[data-panel="none"] .classroom-tools {display:none !important;}
+  .classroom-root.classroom-v2[data-panel="layers"] .classroom-layers {display:flex !important;}
+  .classroom-root.classroom-v2[data-panel="layers"] .classroom-tools {display:none !important;}
+  .classroom-root.classroom-v2[data-panel="tools"] .classroom-tools {display:flex !important;}
+  .classroom-root.classroom-v2[data-panel="tools"] .classroom-layers {display:none !important;}
+}
+@media (max-width: 620px) {
+  .classroom-root.classroom-v2 .classroom-layers,
+  .classroom-root.classroom-v2 .classroom-tools {
+    top: 69px !important;
+    left: 7px !important;
+    right: 7px !important;
+    width: calc(100vw - 14px) !important;
+    bottom: calc(85px + env(safe-area-inset-bottom)) !important;
+    padding: 12px !important;
+  }
+  .classroom-root.classroom-v2 .classroom-layers .classroom-circle-row {min-height: 45px;}
+}
+@media (pointer: coarse), (max-width: 900px), (prefers-reduced-motion: reduce) {
+  .classroom-root.classroom-v2 .classroom-glass {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+  .classroom-root.classroom-v2 .classroom-floating-toolbar.classroom-glass,
+  .classroom-root.classroom-v2 .classroom-top.classroom-glass {
+    box-shadow: 0 3px 12px rgba(4,16,34,.25) !important;
+  }
+  .classroom-root.classroom-v2 .classroom-circle-row,
+  .classroom-root.classroom-v2 button { transition: none !important; }
+}
