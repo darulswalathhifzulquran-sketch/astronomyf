@@ -895,6 +895,96 @@ export function ClassroomApp(){
     setInfo("Teacher drawings cleared; the original astronomical circles remain.");
   };
 
+  const captureProject=():ProjectData=>({visible,zenith,nadir,directions,seasons,showSphere,showNames,
+    view,shape,placement,color,width,marks,strokes,texts});
+  const applyProject=(data:ProjectData)=>{
+    setVisible(data.visible);setZenith(data.zenith);setNadir(data.nadir);setDirections(data.directions);
+    setSeasons(data.seasons);setShowSphere(data.showSphere);setShowNames(data.showNames);
+    setView(data.view);setShape(data.shape);setPlacement(data.placement);
+    setColor(data.color);setHexDraft(data.color);setWidth(data.width);
+    setMarks(data.marks);setStrokes(data.strokes);setTexts(data.texts);
+    setHistory([]);setFuture([]);chooseTool("orbit");
+    setCmd(old=>({number:old.number+1,dir:[0,0,1]}));
+  };
+  const saveProject=(asNew=false)=>{
+    const name=projectName.trim().slice(0,80)||"Untitled Classroom";
+    const id=(!asNew&&activeProjectId)||newProjectId();
+    const entry:SavedProject<ProjectData>={id,version:1,name,updatedAt:new Date().toISOString(),data:captureProject()};
+    const next=[entry,...savedProjects.filter(p=>p.id!==id)];
+    if(!writeProjects(next)){setInfo("Save failed: browser storage is full or disabled. Export a JSON backup.");return;}
+    setSavedProjects(next);setActiveProjectId(id);setSelectedProjectId(id);setProjectName(name);
+    setInfo(asNew?"Saved as a separate classroom project.":"Classroom project saved in this browser.");
+  };
+  const openProject=()=>{
+    const entry=savedProjects.find(p=>p.id===selectedProjectId);
+    if(!entry){setInfo("Select a saved project first.");return;}
+    if(!validProjectData(entry.data)){setInfo("Cannot open: invalid or outdated project data.");return;}
+    if(!window.confirm("Open '"+entry.name+"'? Unsaved workspace changes will be lost."))return;
+    applyProject(entry.data);setActiveProjectId(entry.id);setProjectName(entry.name);
+    setInfo("Opened '"+entry.name+"'. You can continue editing and Save again.");
+  };
+  const renameProject=()=>{
+    const entry=savedProjects.find(p=>p.id===selectedProjectId);
+    if(!entry){setInfo("Select a project to rename.");return;}
+    const answer=window.prompt("Rename saved project",entry.name);
+    if(answer===null)return;
+    const name=answer.trim().slice(0,80);
+    if(!name){setInfo("Project name cannot be empty.");return;}
+    const next=savedProjects.map(p=>p.id===entry.id?{...p,name,updatedAt:new Date().toISOString()}:p);
+    if(!writeProjects(next)){setInfo("Rename failed: browser storage unavailable.");return;}
+    setSavedProjects(next);if(activeProjectId===entry.id)setProjectName(name);
+    setInfo("Saved project renamed.");
+  };
+  const deleteProject=()=>{
+    const entry=savedProjects.find(p=>p.id===selectedProjectId);
+    if(!entry)return;
+    if(!window.confirm("Delete saved project '"+entry.name+"' from this browser? Export it first if needed."))return;
+    const next=savedProjects.filter(p=>p.id!==entry.id);
+    if(!writeProjects(next)){setInfo("Delete failed: browser storage unavailable.");return;}
+    setSavedProjects(next);setSelectedProjectId("");
+    if(activeProjectId===entry.id)setActiveProjectId(null);
+    setInfo("Saved project deleted. Current whiteboard remains open.");
+  };
+  const exportProject=()=>{
+    const name=projectName.trim().slice(0,80)||"Untitled Classroom";
+    const data:SavedProject<ProjectData>={version:1,id:activeProjectId||newProjectId(),name,
+      updatedAt:new Date().toISOString(),data:captureProject()};
+    const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+    const url=URL.createObjectURL(blob),anchor=document.createElement("a");
+    anchor.href=url;anchor.download=(name.replace(/[^a-z0-9_-]+/gi,"-")||"classroom")+".json";
+    document.body.appendChild(anchor);anchor.click();anchor.remove();
+    window.setTimeout(()=>URL.revokeObjectURL(url),1000);
+    setInfo("Exported an editable classroom JSON backup.");
+  };
+  const importProject=async(file:File)=>{
+    try{
+      if(file.size>2_000_000)throw new Error("Project file exceeds 2 MB.");
+      const parsed:unknown=JSON.parse(await file.text());
+      if(!parsed||typeof parsed!=="object")throw new Error("Invalid project JSON.");
+      const item=parsed as Partial<SavedProject<unknown>>;
+      if(item.version!==1||!validProjectData(item.data))throw new Error("Unsupported or invalid project format.");
+      const name=typeof item.name==="string"?(item.name.trim().slice(0,80)||"Imported Classroom"):"Imported Classroom";
+      const entry:SavedProject<ProjectData>={version:1,id:newProjectId(),name,updatedAt:new Date().toISOString(),data:item.data};
+      const next=[entry,...savedProjects];
+      if(!writeProjects(next))throw new Error("Browser storage unavailable. Try exporting existing projects.");
+      applyProject(entry.data);setSavedProjects(next);setActiveProjectId(entry.id);
+      setSelectedProjectId(entry.id);setProjectName(name);setInfo("Imported project and opened it for editing.");
+    }catch(error){setInfo(error instanceof Error?error.message:"Unable to import this project.");}
+  };
+  const newProject=()=>{
+    if(!window.confirm("Start a new classroom? Export or Save any unsaved changes first."))return;
+    setMarks([]);setStrokes([]);setTexts([]);setHistory([]);setFuture([]);
+    setVisible(DEFAULT_VISIBLE);setSeasons(SEASONS.map(x=>x.longitude));
+    setZenith(true);setNadir(true);setDirections(true);setShowSphere(true);setShowNames(true);
+    setShape(true);setPlacement("inside");setView("outside");
+    setCmd(old=>({number:old.number+1,dir:[0,0,1]}));
+    chooseTool("orbit");setActiveProjectId(null);setSelectedProjectId("");
+    setProjectName("Untitled Classroom");setInfo("New classroom project ready.");
+  };
+  const selectedJoinPoint=joinFrom?(joinFrom.type==="stroke"
+    ?[joinFrom.position[0]*stageSize[0],joinFrom.position[1]*stageSize[1]] as XY
+    :cameraRef.current?projectPoint(joinFrom.position,cameraRef.current,stageSize[0],stageSize[1]):null):null;
+
   return <main className="classroom-root classroom-v2" data-panel={mobilePanel} data-view={view} data-shell={showSphere?"shown":"hidden"}>
     <header className="classroom-top classroom-glass">
       <Link to="/" className="classroom-back" aria-label="Back to Observatory"><ArrowLeft size={18}/></Link>
