@@ -4,24 +4,58 @@ import { Html, Line, OrbitControls } from "@react-three/drei";
 import { Link } from "@tanstack/react-router";
 import * as THREE from "three";
 import type { OrbitControls as OrbitImpl } from "three-stdlib";
-import { ArrowLeft, Check, Compass, Eraser, Eye, EyeOff, Maximize2, MousePointer2, Palette, PenLine, RotateCcw, Ruler, Slash, Undo2, X, Shapes, Triangle, DraftingCompass, Redo2, Settings2 } from "lucide-react";
+import { ArrowLeft, Check, Compass, Eraser, Eye, EyeOff, Maximize2, MousePointer2, Palette, PenLine, RotateCcw, Ruler, Slash, Undo2, X, Shapes, Triangle, DraftingCompass, Redo2, Settings2, Save, FolderOpen, FilePlus2, FileDown, FileUp, Link2, Type, Trash2, Pencil } from "lucide-react";
 import { LAYERS, type LayerDef } from "@/data/layers";
 import { buildLayer } from "@/lib/astronomy/layerGeometry";
 import { computeSky } from "@/lib/astronomy/sky";
 import { greatCircle, planeNormal, slerpArc, V } from "@/lib/astronomy/math";
 import { ClassroomInstrument, type RulerPose, type AngleDrawing } from "./ClassroomInstruments";
 import { ClassroomCompass, type CompassDrawing } from "./ClassroomCompass";
+import { ClassroomTextMesh, type TextAnnotation } from "./ClassroomTextMesh";
+import { newProjectId, readProjects, writeProjects, type SavedProject } from "./projectStorage";
 import "./Classroom.css";
+import "./ClassroomEnhancements.css";
 
 type Vec = [number,number,number];
 type XY = [number,number];
-type Tool = "orbit" | "pen" | "line" | "ruler" | "eraser" | "triangle" | "protractor";
+type Tool = "orbit" | "pen" | "line" | "ruler" | "eraser" | "triangle" | "protractor" | "join" | "text3d";
 type Place = "inside" | "outside";
 type View = "outside" | "inside";
 type Mark = {id:string;points:Vec[];color:string;width:number;surface:boolean;inside:boolean;measure?:string;anchorA?:Vec;anchorB?:Vec;kind?:"pen"|"line"|"ruler"};
 type Stroke = {id:string;points:XY[];color:string;width:number;measure?:{x:number;y:number;label:string}};
-type Snapshot = {marks:Mark[];strokes:Stroke[]};
-type Gesture = {pointer:number;kind:"screen"|"erase"|"free-line"|"edit"|"sphere"|"free-multi"|"hollow-pen";x:number;y:number;startX:number;startY:number;dragged:boolean;guide:boolean};
+type Snapshot = {marks:Mark[];strokes:Stroke[];texts:TextAnnotation[]};
+type JoinEndpoint = {id:string;type:"mark";position:Vec} | {id:string;type:"stroke";position:XY};
+type ProjectData = {
+  visible:string[]; zenith:boolean; nadir:boolean; directions:boolean; seasons:number[];
+  showSphere:boolean; showNames:boolean; view:View; shape:boolean; placement:Place;
+  color:string; width:number; marks:Mark[]; strokes:Stroke[]; texts:TextAnnotation[];
+};
+function validProjectData(value:unknown):value is ProjectData {
+  if(!value||typeof value!=="object")return false;
+  const p=value as ProjectData;
+  const coord=(a:unknown,n:number):boolean=>Array.isArray(a)&&a.length===n&&a.every(v=>typeof v==="number"&&Number.isFinite(v)&&Math.abs(v)<1000);
+  return Array.isArray(p.visible)&&p.visible.length<=30&&p.visible.every(id=>typeof id==="string"&&LAYERS.some(l=>l.id===id))&&
+    ["zenith","nadir","directions","showSphere","showNames","shape"].every(key=>typeof p[key as keyof ProjectData]==="boolean")&&
+    Array.isArray(p.seasons)&&p.seasons.length<=4&&p.seasons.every(x=>typeof x==="number")&&
+    (p.view==="inside"||p.view==="outside")&&(p.placement==="inside"||p.placement==="outside")&&
+    typeof p.color==="string"&&/^#[0-9a-fA-F]{6}$/.test(p.color)&&
+    typeof p.width==="number"&&p.width>=1&&p.width<=9&&
+    Array.isArray(p.marks)&&p.marks.length<1000&&p.marks.every(m=>!!m&&typeof m.id==="string"&&
+      typeof m.color==="string"&&/^#[0-9a-fA-F]{6}$/.test(m.color)&&
+      typeof m.width==="number"&&m.width>=1&&m.width<=9&&
+      typeof m.surface==="boolean"&&typeof m.inside==="boolean"&&
+      Array.isArray(m.points)&&m.points.length>=2&&m.points.length<2000&&m.points.every(v=>coord(v,3))&&
+      (!m.anchorA||coord(m.anchorA,3))&&(!m.anchorB||coord(m.anchorB,3)))&&
+    Array.isArray(p.strokes)&&p.strokes.length<1000&&p.strokes.every(m=>!!m&&typeof m.id==="string"&&
+      typeof m.color==="string"&&/^#[0-9a-fA-F]{6}$/.test(m.color)&&
+      typeof m.width==="number"&&m.width>=1&&m.width<=9&&
+      Array.isArray(m.points)&&m.points.length>=2&&m.points.length<8000&&m.points.every(v=>coord(v,2)))&&
+    Array.isArray(p.texts)&&p.texts.length<200&&p.texts.every(x=>!!x&&typeof x.id==="string"&&
+      typeof x.value==="string"&&x.value.length<=100&&typeof x.color==="string"&&
+      /^#[0-9a-fA-F]{6}$/.test(x.color)&&typeof x.size==="number"&&x.size>=0.07&&x.size<=0.5&&
+      typeof x.inside==="boolean"&&coord(x.position,3));
+}
+type Gesture = {pointer:number;kind:"screen"|"erase"|"free-line"|"edit"|"sphere"|"free-multi"|"hollow-pen"|"join";x:number;y:number;startX:number;startY:number;dragged:boolean;guide:boolean};
 type Edit = {id:string;endpoint:0|1};
 type CameraCmd = {number:number;dir:Vec};
 const SEASONS = [
@@ -31,6 +65,9 @@ const SEASONS = [
   {longitude:270,ar:"الانقلاب الشتوي",en:"December Solstice"},
 ] as const;
 const GREAT=LAYERS.filter(l=>l.group==="great").slice(0,10);
+const SMALL=LAYERS.filter(l=>l.group==="small");
+const ARCS=LAYERS.filter(l=>l.group==="arc");
+const GEOMETRY=[...GREAT,...SMALL,...ARCS];
 const DEFAULT_VISIBLE=GREAT.filter(l=>[1,2,6,7].includes(l.num)).map(l=>l.id);
 const PALETTE=["#e8ecf5","#fb6379","#51a1ff","#3fe0aa","#c795ff","#ffd06a"];
 const SKY_DATE=new Date("2026-03-20T12:00:00Z");
@@ -284,23 +321,23 @@ function MarkLine({mark,view,showSphere,edit,onBeginEdit}:{mark:Mark;view:View;s
     })}
   </group>;
 }
-function Sphere({visible,zenith,nadir,directions,seasons,marks,pending,tool,color,view,cmd,showSphere,showNames,edit,draft,onPoint,onBeginEdit}:{
+function Sphere({visible,zenith,nadir,directions,seasons,marks,texts,pending,tool,color,view,cmd,showSphere,showNames,edit,draft,onPoint,onBeginEdit}:{
  visible:string[];zenith:boolean;nadir:boolean;directions:boolean;seasons:number[];
- marks:Mark[];pending:Vec|null;tool:Tool;color:string;view:View;cmd:CameraCmd;showSphere:boolean;showNames:boolean;
+ marks:Mark[];texts:TextAnnotation[];pending:Vec|null;tool:Tool;color:string;view:View;cmd:CameraCmd;showSphere:boolean;showNames:boolean;
  edit:Edit|null;draft:Vec[];onPoint:(p:Vec)=>void;onBeginEdit:(id:string,endpoint:0|1)=>void;
 }){
   const sky=useMemo(()=>computeSky(SKY_DATE,0,75.8),[]);
-  const great=useMemo(()=>GREAT.map(layer=>{
+  const geometry=useMemo(()=>GEOMETRY.map(layer=>{
     const geom=buildLayer(layer.id,sky);
-    // Circle 9 remains a teaching schematic pending textual verification.
+    // Circle 9 remains explicitly schematic pending primary-source verification.
     const lines=geom.lines.length?geom.lines:layer.num===9?[greatCircle(planeNormal(sky.K,V(0,1,0)))]:[];
-    return {layer,lines};
+    return {layer,lines,label:geom.label};
   }),[sky]);
   // All tool positions are resolved once from stage-relative pointer coordinates.
   // The invisible sphere is visual-only here; stage handles click raycasting.
   return <>
     <ambientLight intensity={0.9}/>
-    <ClassroomCamera view={view} cmd={cmd} enabled={tool!=="eraser"&&!edit}/>
+    <ClassroomCamera view={view} cmd={cmd} enabled={tool!=="eraser"&&tool!=="join"&&!edit}/>
     {showSphere&&view==="outside"&&<mesh renderOrder={-1} raycast={()=>null}>
       <sphereGeometry args={[0.997,72,56]}/><meshBasicMaterial colorWrite={false} depthWrite/>
     </mesh>}
@@ -315,11 +352,14 @@ function Sphere({visible,zenith,nadir,directions,seasons,marks,pending,tool,colo
       <mesh scale={1.001} raycast={()=>null}><sphereGeometry args={[1,32,24]}/>
         <meshBasicMaterial side={THREE.DoubleSide} color="#80a7cf" wireframe transparent opacity={0.07} depthWrite={false}/></mesh>
     </>}
-    {great.filter(({layer})=>visible.includes(layer.id)).map(({layer,lines})=><group key={layer.id}>
+    {geometry.filter(({layer})=>visible.includes(layer.id)).map(({layer,lines,label})=><group key={layer.id}>
       {lines.map((pts,i)=><Line key={i} points={pts.map(p=>p.clone().multiplyScalar(1.008))}
         color={layer.color} lineWidth={layer.num<=2?3.2:2.2}
         transparent opacity={0.98} depthTest={showSphere&&view==="outside"} depthWrite={false} raycast={()=>null}/>)}
-      {showNames&&<CircleName layer={layer} lines={lines} index={layer.num-1} view={view}/>}
+      {showNames&&lines.length>0&&(layer.group==="great"
+         ?<CircleName layer={layer} lines={lines} index={layer.num-1} view={view}/>
+         :label&&<Tag p={label.clone().normalize().multiplyScalar(1.12)} ar={layer.ar} en={layer.en}
+           color={layer.color} view={view} showSphere={showSphere}/>)}
     </group>)}
     {directions&&([
       [V(0,0,-1.16),"N","North"],[V(0,0,1.16),"S","South"],
@@ -334,6 +374,7 @@ function Sphere({visible,zenith,nadir,directions,seasons,marks,pending,tool,colo
         <Tag p={p.clone().multiplyScalar(1.17)} ar={s.ar} en={s.en} view={view} showSphere={showSphere} color="#ffcb93"/>
       </group>;
     })}
+    {texts.map(item=><ClassroomTextMesh key={item.id} annotation={item}/>)}
     {marks.map(mark=><MarkLine key={mark.id} mark={mark} view={view} showSphere={showSphere} edit={edit} onBeginEdit={onBeginEdit}/>)}
     {draft.length>1&&<Line points={draft.map(p=>new THREE.Vector3(...p))} color={color}
       lineWidth={3} depthTest={false} depthWrite={false} raycast={()=>null}/>} 
@@ -385,6 +426,16 @@ export function ClassroomApp(){
   const [stageSize,setStageSize]=useState<XY>([1000,700]);
   const [edit,setEdit]=useState<Edit|null>(null);
   const [marks,setMarks]=useState<Mark[]>([]);
+  const [texts,setTexts]=useState<TextAnnotation[]>([]);
+  const [textInput,setTextInput]=useState("السَّمَاءُ");
+  const [textSize,setTextSize]=useState(0.18);
+  const [joinFrom,setJoinFrom]=useState<JoinEndpoint|null>(null);
+  const [savedProjects,setSavedProjects]=useState<SavedProject<ProjectData>[]>([]);
+  const [activeProjectId,setActiveProjectId]=useState<string|null>(null);
+  const [selectedProjectId,setSelectedProjectId]=useState("");
+  const [projectName,setProjectName]=useState("Untitled Classroom");
+  const importRef=useRef<HTMLInputElement|null>(null);
+  useEffect(()=>{setSavedProjects(readProjects<ProjectData>());},[]);
   const [strokes,setStrokes]=useState<Stroke[]>([]);
   const [drawing,setDrawing]=useState<Stroke|null>(null);
   const [history,setHistory]=useState<Snapshot[]>([]);
@@ -405,13 +456,15 @@ export function ClassroomApp(){
   const gesture=useRef<Gesture|null>(null);
   const nextId=useRef(1);
   const makeId=()=>String(nextId.current++);
-  const snapshot=useCallback(()=>{setHistory(old=>[...old,{marks,strokes}]);setFuture([]);},[marks,strokes]);
+  const snapshot=useCallback(()=>{setHistory(old=>[...old,{marks,strokes,texts}]);setFuture([]);},[marks,strokes,texts]);
 
   const chooseTool=(next:Tool)=>{
-    setTool(next);setPending(null);setPendingScreen(null);setPendingVertices([]);setPendingScreenVertices([]);setDrawing(null);setHollowPenDraft([]);hollowDraftRef.current=[];setEdit(null);
+    setTool(next);setPending(null);setPendingScreen(null);setPendingVertices([]);setPendingScreenVertices([]);setDrawing(null);setHollowPenDraft([]);hollowDraftRef.current=[];setEdit(null);setJoinFrom(null);
     setInfo(next==="orbit"?"Drag vertically N–S or horizontally E–W; scroll/pinch to zoom.":
       next==="eraser"?"Click any teacher-drawn line to remove it; drag across a portion to cut it.":
       next==="pen"?"Shape ON: follow ball skin. Inside + Shape OFF: draw hollow 3D segments. Drag along the ruler edge for a perfect straight stroke.":
+      next==="join"?"Join lines: click the end of one drawn line and then the end of another. Works without the sphere.":
+      next==="text3d"?"Enter your text in the toolbox, then click a location on the globe to place it in 3D.": 
       next==="line"?"Shape ON: ball-surface arc. Inside + Shape OFF: 3D straight chord through the hollow interior. Outside + OFF: flat line.":
       next==="triangle"?"Choose three points. Shape ON draws spherical edges; OFF draws straight triangle sides.":
       next==="protractor"?"Choose vertex, first arm, second arm to measure the angle.":
@@ -436,7 +489,15 @@ export function ClassroomApp(){
   },[]);
   const onPoint=useCallback((point:Vec)=>{
     if(edit){snapshot();moveEndpoint(edit,point);setEdit(null);setInfo("Endpoint moved. Undo restores the previous position.");return;}
-    if(tool==="orbit"||tool==="eraser")return;
+    if(tool==="orbit"||tool==="eraser"||tool==="join")return;
+    if(tool==="text3d"){
+      const value=textInput.trim().slice(0,100);
+      if(!value){setInfo("Enter the label text first.");return;}
+      snapshot();
+      setTexts(old=>[...old,{id:makeId(),value,position:t(v(point)),inside:view==="inside",color,size:textSize}]);
+      setInfo("3D text placed. Edit or delete it in the toolbox.");
+      return;
+    }
     if(!shape&&view==="inside"&&tool==="line"){
       if(!pending){setPending(point);setInfo("First internal endpoint selected. Choose the other endpoint.");return;}
       if(angle(pending,point)<.006)return;
@@ -487,7 +548,7 @@ export function ClassroomApp(){
       setPending(null);
       setInfo("Line follows the ball skin. Double-click a handle to adjust it.");
     }
-  },[edit,tool,shape,pending,pendingVertices,view,color,width,snapshot,moveEndpoint]);
+  },[edit,tool,shape,pending,pendingVertices,view,color,width,snapshot,moveEndpoint,textInput,textSize]);
 
   // All pointer positions are relative to the SAME classroom stage, in CSS pixels.
   // Camera raycasting, SVG ink, hit-testing and eraser visuals share this frame.
@@ -571,6 +632,56 @@ export function ClassroomApp(){
       setInfo(tool==="triangle"?"Straight triangle completed.":"Measured angle: "+planarAngle(b,a,c).toFixed(1)+"°");
     }
   };
+  const joinAt=(pixel:XY)=>{
+    const camera=cameraRef.current;
+    if(!camera){setInfo("The 3D scene is still initializing.");return;}
+    const [w,h]=stageSize;
+    let best:JoinEndpoint|null=null, nearest=26;
+    for(const mark of marks){
+      if(mark.points.length<2)continue;
+      for(const point of [mark.points[0]!,mark.points[mark.points.length-1]!] as Vec[]){
+        if(!visiblePoint(point,camera,view,showSphere))continue;
+        const screen=projectPoint(point,camera,w,h);
+        if(!screen)continue;
+        const distance=dist2(screen,pixel);
+        if(distance<nearest){nearest=distance;best={id:mark.id,type:"mark",position:point};}
+      }
+    }
+    for(const stroke of strokes){
+      if(stroke.points.length<2)continue;
+      for(const point of [stroke.points[0]!,stroke.points[stroke.points.length-1]!] as XY[]){
+        const distance=dist2([point[0]*w,point[1]*h],pixel);
+        if(distance<nearest){nearest=distance;best={id:stroke.id,type:"stroke",position:point};}
+      }
+    }
+    if(!best){setInfo("Join: click within 26 pixels of a line endpoint.");return;}
+    if(!joinFrom){setJoinFrom(best);setInfo("First endpoint selected. Select the endpoint of another line.");return;}
+    if(joinFrom.id===best.id&&joinFrom.type===best.type&&
+       joinFrom.position.every((x,i)=>Math.abs(x-best!.position[i]!)<0.0001)){
+      setInfo("Choose a different endpoint.");return;
+    }
+    snapshot();
+    if(joinFrom.type==="mark"&&best.type==="mark"){
+      const from=new THREE.Vector3(...joinFrom.position),to=new THREE.Vector3(...best.position);
+      const steps=Math.max(2,Math.ceil(from.distanceTo(to)*130));
+      const points=Array.from({length:steps},(_,i):Vec=>t(from.clone().lerp(to,i/(steps-1))));
+      setMarks(old=>[...old,{id:makeId(),points,color,width,surface:false,inside:false,kind:"line"}]);
+      setInfo("Joined line endpoints with a true free-space 3D segment.");
+    }else{
+      const toScreen=(end:JoinEndpoint):XY=>{
+        if(end.type==="stroke")return end.position;
+        const p=projectPoint(end.position,camera,w,h);
+        return p?[p[0]/w,p[1]/h]:[0.5,0.5];
+      };
+      const a=toScreen(joinFrom),b=toScreen(best);
+      const steps=Math.max(2,Math.ceil(dist2([a[0]*w,a[1]*h],[b[0]*w,b[1]*h])/5));
+      const points=Array.from({length:steps},(_,i):XY=>[
+        a[0]+(b[0]-a[0])*i/(steps-1),a[1]+(b[1]-a[1])*i/(steps-1)]);
+      setStrokes(old=>[...old,{id:makeId(),points,color,width}]);
+      setInfo(joinFrom.type===best.type?"Joined two whiteboard line endpoints.":"Joined across 2D/3D as a screen-space line.");
+    }
+    setJoinFrom(null);
+  };
   const screenDown=(e:ReactPointerEvent<HTMLElement>)=>{
     if((e.target as Element).closest(".classroom-instrument"))return;
     if(!e.isPrimary){gesture.current=null;return;}
@@ -578,7 +689,9 @@ export function ClassroomApp(){
     const p=pixelFromClient(e.clientX,e.clientY);
     const snap=(tool==="pen"||tool==="line")?guided(p):null;
     const useRuler=Boolean(snap);
-    const kind:Gesture["kind"]|null=edit?"edit":
+    const kind:Gesture["kind"]|null=tool==="join"?"join":
+      tool==="text3d"?"sphere":
+      edit?"edit":
       tool==="eraser"?"erase":
       tool==="pen"&&useRuler?"screen":
       tool==="line"&&(useRuler||pendingScreen)?"free-line":
@@ -667,7 +780,9 @@ export function ClassroomApp(){
       return;
     }
     e.stopPropagation();
-    if(g.kind==="hollow-pen"){
+    if(g.kind==="join"){
+      if(!g.dragged)joinAt(p);
+    }else if(g.kind==="hollow-pen"){
       const points=hollowDraftRef.current;
       if(points.length>1)setMarks(old=>[...old,{id:makeId(),points,color,width,surface:false,inside:true,kind:"pen"}]);
       hollowDraftRef.current=[];
@@ -693,7 +808,7 @@ export function ClassroomApp(){
     if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);
   };
   const screenDoubleClick=(e:ReactMouseEvent<HTMLElement>)=>{
-    if(!cameraRef.current||tool==="eraser")return;
+    if(!cameraRef.current||tool==="eraser"||tool==="join")return;
     const p=pixelFromClient(e.clientX,e.clientY);
     let best:{id:string;index:0|1;distance:number}|null=null;
     for(const mark of marks){
@@ -747,21 +862,22 @@ export function ClassroomApp(){
   };
   const undo=()=>{
     if(edit){setEdit(null);return;}
+    if(joinFrom){setJoinFrom(null);return;}
     if(pending||pendingScreen||pendingVertices.length||pendingScreenVertices.length){
       setPending(null);setPendingScreen(null);setPendingVertices([]);setPendingScreenVertices([]);return;
     }
     const previous=history[history.length-1];
     if(!previous)return;
-    setFuture(old=>[...old,{marks,strokes}]);
-    setMarks(previous.marks);setStrokes(previous.strokes);
+    setFuture(old=>[...old,{marks,strokes,texts}]);
+    setMarks(previous.marks);setStrokes(previous.strokes);setTexts(previous.texts);
     setHistory(old=>old.slice(0,-1));
     setInfo("Undo successful.");
   };
   const redo=()=>{
     if(!future.length)return;
     const next=future[future.length-1]!;
-    setHistory(old=>[...old,{marks,strokes}]);
-    setMarks(next.marks);setStrokes(next.strokes);
+    setHistory(old=>[...old,{marks,strokes,texts}]);
+    setMarks(next.marks);setStrokes(next.strokes);setTexts(next.texts);
     setFuture(old=>old.slice(0,-1));
     setInfo("Redo successful.");
   };
@@ -773,9 +889,9 @@ export function ClassroomApp(){
     setInfo("Compass circle / arc drawn accurately on the whiteboard.");
   };
   const clear=()=>{
-    if(!marks.length&&!strokes.length&&!pending&&!pendingScreen&&!pendingVertices.length&&!pendingScreenVertices.length)return;
+    if(!marks.length&&!strokes.length&&!texts.length&&!pending&&!pendingScreen&&!pendingVertices.length&&!pendingScreenVertices.length)return;
     if(!window.confirm("Clear all classroom drawings?"))return;
-    snapshot();setMarks([]);setStrokes([]);setPending(null);setPendingScreen(null);setPendingVertices([]);setPendingScreenVertices([]);setDrawing(null);setEdit(null);
+    snapshot();setMarks([]);setStrokes([]);setTexts([]);setJoinFrom(null);setPending(null);setPendingScreen(null);setPendingVertices([]);setPendingScreenVertices([]);setDrawing(null);setEdit(null);
     setInfo("Teacher drawings cleared; the original astronomical circles remain.");
   };
 
