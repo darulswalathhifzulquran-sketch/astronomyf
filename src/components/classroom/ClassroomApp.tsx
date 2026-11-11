@@ -15,6 +15,7 @@ import { ClassroomTextMesh, type TextAnnotation } from "./ClassroomTextMesh";
 import { cleanLineName, isValidStoredLineName, lineLabelPoint2D, lineLabelPoint3D } from "./lineLabels";
 import { newProjectId, readProjects, writeProjects, type SavedProject } from "./projectStorage";
 import { centerAxisPaths, interpolate2, interpolate3, nearestProjectedSegment, perspectiveCorrectRatio } from "./joinGeometry";
+import { pickDrawnLine, pressHasMoved, type DrawnLineCandidate, type LinePick } from "./lineInteraction";
 import "./Classroom.css";
 import "./ClassroomEnhancements.css";
 
@@ -60,7 +61,10 @@ function validProjectData(value:unknown):value is ProjectData {
       typeof x.inside==="boolean"&&coord(x.position,3));
 }
 type Gesture = {pointer:number;kind:"screen"|"erase"|"free-line"|"edit"|"sphere"|"free-multi"|"hollow-pen"|"join";x:number;y:number;startX:number;startY:number;dragged:boolean;guide:boolean};
-type Edit = {id:string;endpoint:0|1};
+type Edit = {id:string;endpoint:0|1;kind:"mark"|"stroke"};
+type LineMenu = {selection:LinePick;at:XY};
+type Hold = {pointer:number;start:XY;selection:LinePick;timer:number|null;
+  fired:boolean;cancelled:boolean;dragged:boolean};
 type CameraCmd = {number:number;dir:Vec};
 const SEASONS = [
   {longitude:0,ar:"نُقْطَةُ الِاعْتِدَالِ الرَّبِيعِيِّ",en:"Vernal Equinox · East"},
@@ -327,7 +331,7 @@ function ClassroomCamera({view,cmd,enabled}:{view:View;cmd:CameraCmd;enabled:boo
     minDistance={view==="inside"?0.002:1.3}
     maxDistance={view==="inside"?0.992:11}/>;
 }
-function MarkLine({mark,view,showSphere,edit,onBeginEdit}:{mark:Mark;view:View;showSphere:boolean;edit:Edit|null;onBeginEdit:(id:string,endpoint:0|1)=>void}){
+function MarkLine({mark,view,showSphere,edit}:{mark:Mark;view:View;showSphere:boolean;edit:Edit|null}){
   if(mark.points.length<2)return null;
   const midpoint=mark.points[Math.floor(mark.points.length/2)]!;
   const namePoint=mark.name?lineLabelPoint3D(mark.points):null;
@@ -343,25 +347,31 @@ function MarkLine({mark,view,showSphere,edit,onBeginEdit}:{mark:Mark;view:View;s
     {mark.measure&&<Html position={new THREE.Vector3(...midpoint)} center style={{pointerEvents:"none"}}>
       <span className="classroom-measure-label">{mark.measure}</span>
     </Html>}
+    {edit?.kind==="mark"&&edit.id===mark.id&&!mark.anchorA&&
+      <mesh raycast={()=>null}
+        position={new THREE.Vector3(...mark.points[edit.endpoint===0?0:mark.points.length-1]!)}>
+        <sphereGeometry args={[0.036,12,12]}/>
+        <meshBasicMaterial color="#fff2a7" depthTest={false} depthWrite={false}/>
+      </mesh>}
     {mark.anchorA&&mark.anchorB&&([mark.anchorA,mark.anchorB] as const).map((anchor,index)=>{
-      const active=edit?.id===mark.id&&edit.endpoint===index;
+      const active=edit?.kind==="mark"&&edit.id===mark.id&&edit.endpoint===index;
       const edge=mark.points[index===0?0:mark.points.length-1]!;
       const position=mark.surface?v(anchor).multiplyScalar(mark.inside?0.982:1.027):new THREE.Vector3(...edge);
       return <mesh key={index} position={position}
         onPointerDown={e=>e.stopPropagation()}
         onPointerUp={e=>e.stopPropagation()}
-        onDoubleClick={e=>{e.stopPropagation();onBeginEdit(mark.id,index as 0|1);}}>
+        >
         <sphereGeometry args={[active?0.038:0.026,16,16]}/>
         <meshBasicMaterial color={active?"#fff568":mark.color} transparent opacity={active?1:0.94} depthTest={false}/>
       </mesh>;
     })}
   </group>;
 }
-function Sphere({geometry,sky,lite,zenith,nadir,directions,seasons,marks,texts,pending,tool,color,view,cmd,showSphere,showNames,edit,draft,onBeginEdit}:{
+function Sphere({geometry,sky,lite,zenith,nadir,directions,seasons,marks,texts,pending,tool,color,view,cmd,showSphere,showNames,edit,draft}:{
  geometry:GeometryEntry[];sky:ReturnType<typeof computeSky>;lite:boolean;
  zenith:boolean;nadir:boolean;directions:boolean;seasons:number[];
  marks:Mark[];texts:TextAnnotation[];pending:Vec|null;tool:Tool;color:string;view:View;cmd:CameraCmd;showSphere:boolean;showNames:boolean;
- edit:Edit|null;draft:Vec[];onBeginEdit:(id:string,endpoint:0|1)=>void;
+ edit:Edit|null;draft:Vec[];
 }){
   // All tool positions are resolved once from stage-relative pointer coordinates.
   // The invisible sphere is visual-only here; stage handles click raycasting.
@@ -406,7 +416,7 @@ function Sphere({geometry,sky,lite,zenith,nadir,directions,seasons,marks,texts,p
         <sphereGeometry args={[0.026,12,12]}/>
         <meshBasicMaterial color="#fff2a7" depthTest={false} depthWrite={false}/>
       </mesh>}
-    {marks.map(mark=><MarkLine key={mark.id} mark={mark} view={view} showSphere={showSphere} edit={edit} onBeginEdit={onBeginEdit}/>)}
+    {marks.map(mark=><MarkLine key={mark.id} mark={mark} view={view} showSphere={showSphere} edit={edit}/>)}
     {draft.length>1&&<Line points={draft.map(p=>new THREE.Vector3(...p))} color={color}
       lineWidth={3} depthTest={false} depthWrite={false} raycast={()=>null}/>} 
     {pending&&<mesh raycast={()=>null} position={v(pending).multiplyScalar(view==="inside"?0.981:1.027)}>
@@ -459,6 +469,14 @@ export function ClassroomApp(){
   const stageRef=useRef<HTMLElement|null>(null);
   const [stageSize,setStageSize]=useState<XY>([1000,700]);
   const [edit,setEdit]=useState<Edit|null>(null);
+  const [lineMenu,setLineMenu]=useState<LineMenu|null>(null);
+  const holdRef=useRef<Hold|null>(null);
+  const cancelHold=()=>{
+    const hold=holdRef.current;
+    if(hold?.timer!==null&&hold?.timer!==undefined)window.clearTimeout(hold.timer);
+    holdRef.current=null;
+  };
+  useEffect(()=>()=>cancelHold(),[]);
   const [marks,setMarks]=useState<Mark[]>([]);
   const [texts,setTexts]=useState<TextAnnotation[]>([]);
   const [nameTask,setNameTask]=useState<NameTask|null>(null);
@@ -483,7 +501,7 @@ export function ClassroomApp(){
   const [drawing,setDrawing]=useState<Stroke|null>(null);
   const [history,setHistory]=useState<Snapshot[]>([]);
   const [future,setFuture]=useState<Snapshot[]>([]);
-  const [info,setInfo]=useState("Draw on the ball · Double-click endpoints to edit · Hide Sphere for circles only.");
+  const [info,setInfo]=useState("Select: double-click a drawn line on PC, or hold it on touch. Hold a line end to edit.");
   const [eraserCursor,setEraserCursor]=useState<XY|null>(null);
   const cameraRef=useRef<THREE.Camera|null>(null);
   useEffect(()=>{
@@ -550,6 +568,7 @@ export function ClassroomApp(){
   };
 
   const chooseTool=(next:Tool)=>{
+    cancelHold();setLineMenu(null);
     setTool(next);setPending(null);setPendingScreen(null);setPendingVertices([]);setPendingScreenVertices([]);setDrawing(null);setHollowPenDraft([]);hollowDraftRef.current=[];setEdit(null);setJoinFrom(null);
     setInfo(next==="orbit"?"Drag vertically N–S or horizontally E–W; scroll/pinch to zoom.":
       next==="eraser"?"Click any teacher-drawn line to remove it; drag across a portion to cut it.":
@@ -564,22 +583,24 @@ export function ClassroomApp(){
   };
   const moveEndpoint=useCallback((which:Edit,point:Vec)=>{
     setMarks(old=>old.map(mark=>{
-      if(mark.id!==which.id||!mark.anchorA||!mark.anchorB)return mark;
-      const a=which.endpoint===0?point:mark.anchorA;
-      const b=which.endpoint===1?point:mark.anchorB;
-      if(angle(a,b)<0.003)return mark;
-      const pts=mark.surface?shapePath(a,b,mark.inside):
-        mark.inside?segmentInSphere(a,b):straightPath(a,b,"outside");
-      return {...mark,anchorA:a,anchorB:b,points:pts,measure:mark.kind==="ruler"?deg(a,b)+"°":undefined};
+      if(which.kind!=="mark"||mark.id!==which.id)return mark;
+      if(mark.anchorA&&mark.anchorB){
+        const a=which.endpoint===0?point:mark.anchorA;
+        const b=which.endpoint===1?point:mark.anchorB;
+        if(angle(a,b)<0.003)return mark;
+        const pts=mark.surface?shapePath(a,b,mark.inside):
+          mark.inside?segmentInSphere(a,b):straightPath(a,b,"outside");
+        return {...mark,anchorA:a,anchorB:b,points:pts,measure:mark.kind==="ruler"?deg(a,b)+"°":undefined};
+      }
+      // Center axes, Join chords and freehand paths have no anchorA/B:
+      // allow editing their real first and last vertices as well.
+      const points=[...mark.points];
+      points[which.endpoint===0?0:points.length-1]=point;
+      return {...mark,points};
     }));
   },[]);
-  const onBeginEdit=useCallback((id:string,endpoint:0|1)=>{
-    setPending(null);setPendingScreen(null);
-    setEdit({id,endpoint});
-    setInfo("Edit endpoint: drag it onto the sphere or click a new destination. Use Undo to reverse.");
-  },[]);
   const onPoint=useCallback((point:Vec)=>{
-    if(edit){snapshot();moveEndpoint(edit,point);setEdit(null);setInfo("Endpoint moved. Undo restores the previous position.");return;}
+    if(edit&&edit.kind==="mark"){snapshot();moveEndpoint(edit,point);setEdit(null);setInfo("Endpoint moved. Undo restores the previous position.");return;}
     if(tool==="orbit"||tool==="eraser"||tool==="join")return;
     if(tool==="text3d"){
       const value=textInput.trim().slice(0,100);
@@ -851,11 +872,135 @@ export function ClassroomApp(){
     }
     setJoinFrom(null);
   };
+  /** Hit test against saved teacher marks/ink, never the reference geometry.
+   * Called only for touch-down or desktop double click, not on every frame. */
+  const selectDrawnLine=(pixel:XY,touch:boolean):LinePick|null=>{
+    const [w,h]=stageSize,camera=cameraRef.current;
+    const candidates:DrawnLineCandidate[]=[];
+    for(const mark of marks){
+      if(!camera||mark.points.length<2)continue;
+      const step=Math.max(1,Math.ceil(mark.points.length/480));
+      const points=mark.points.filter((_,i)=>i%step===0||i===mark.points.length-1);
+      candidates.push({id:mark.id,kind:"mark",screen:points.map(p=>
+        !mark.surface||visiblePoint(p,camera,view,showSphere)?projectPoint(p,camera,w,h):null)});
+    }
+    for(const stroke of strokes){
+      if(stroke.points.length<2)continue;
+      const step=Math.max(1,Math.ceil(stroke.points.length/600));
+      const points=stroke.points.filter((_,i)=>i%step===0||i===stroke.points.length-1);
+      candidates.push({id:stroke.id,kind:"stroke",
+        screen:points.map(p=>[p[0]*w,p[1]*h] as XY)});
+    }
+    return pickDrawnLine(candidates,pixel,touch?25:17,touch?24:15);
+  };
+  /** Move line endpoint with full undo support for 2D + hollow/surface 3D.
+   * Free-space endpoints move in a plane through their old location, avoiding
+   * accidental snapping onto the outer shell. */
+  const moveEditAtPixel=(target:Edit,pixel:XY):boolean=>{
+    if(target.kind==="stroke"){
+      const next=normalizedFromPixel(pixel);
+      setStrokes(old=>old.map(stroke=>{
+        if(stroke.id!==target.id||stroke.points.length<2)return stroke;
+        const points=[...stroke.points];
+        const start=stroke.points[0]!,end=stroke.points[stroke.points.length-1]!;
+        // When the original stroke is straight, keep it straight rather than
+        // moving just one of its densely sampled vertices.
+        const straight=stroke.points.every(p=>screenDistance(p,start,end)<0.003);
+        if(straight){
+          const a=target.endpoint===0?next:start,b=target.endpoint===1?next:end;
+          return {...stroke,points:points.map((_,i):XY=>[
+            a[0]+(b[0]-a[0])*i/(points.length-1),
+            a[1]+(b[1]-a[1])*i/(points.length-1),
+          ])};
+        }
+        points[target.endpoint===0?0:points.length-1]=next;
+        return {...stroke,points};
+      }));
+      return true;
+    }
+    const mark=marks.find(line=>line.id===target.id);
+    if(!mark)return false;
+    let point:Vec|null=null;
+    if(mark.surface||Boolean(mark.anchorA&&mark.anchorB)){
+      point=sphereFromPixel(pixel);
+    }else{
+      const camera=cameraRef.current;
+      if(camera){
+        const old=mark.points[target.endpoint===0?0:mark.points.length-1]!;
+        const [w,h]=stageSize;
+        const ray=new THREE.Raycaster();
+        ray.setFromCamera(new THREE.Vector2(pixel[0]/w*2-1,1-pixel[1]/h*2),camera);
+        const plane=new THREE.Plane().setFromNormalAndCoplanarPoint(
+          camera.getWorldDirection(new THREE.Vector3()),new THREE.Vector3(...old));
+        const destination=ray.ray.intersectPlane(plane,new THREE.Vector3());
+        if(destination&&destination.length()<8)point=t(destination);
+      }
+    }
+    if(!point)return false;
+    moveEndpoint(target,point);
+    return true;
+  };
+  const beginEndpointEdit=(selection:LinePick)=>{
+    if(selection.endpoint===null)return;
+    setLineMenu(null);
+    setPending(null);setPendingScreen(null);setPendingVertices([]);setPendingScreenVertices([]);
+    setEdit({kind:selection.kind,id:selection.id,endpoint:selection.endpoint});
+    setInfo("Endpoint selected. Drag it to move, or tap a new destination. Undo restores the previous point.");
+  };
+  const openLineActions=(selection:LinePick,at:XY)=>{
+    setPending(null);setPendingScreen(null);setPendingVertices([]);setPendingScreenVertices([]);
+    setEdit(null);setLineMenu({selection,at});
+    setInfo("Selected a teacher-drawn line. Edit its label or delete it.");
+  };
+  const contextualLine=lineMenu?(lineMenu.selection.kind==="mark"
+    ?marks.find(line=>line.id===lineMenu.selection.id)
+    :strokes.find(line=>line.id===lineMenu.selection.id)):undefined;
+  const contextualEditLabel=()=>{
+    if(!lineMenu||!contextualLine)return;
+    setSelectedLineKey(lineMenu.selection.kind+":"+lineMenu.selection.id);
+    setNameDraft(contextualLine.name??"");
+    setNameTask({kind:lineMenu.selection.kind,ids:[lineMenu.selection.id],index:0,editing:true});
+    setLineMenu(null);
+  };
+  const contextualDelete=()=>{
+    if(!lineMenu||!contextualLine)return;
+    if(!window.confirm("Delete this drawn line"+(contextualLine.name?" ('"+contextualLine.name+"')":"")+"? You can Undo afterwards."))return;
+    snapshot();
+    if(lineMenu.selection.kind==="mark"){
+      setMarks(old=>old.filter(line=>line.id!==lineMenu.selection.id));
+    }else{
+      setStrokes(old=>old.filter(line=>line.id!==lineMenu.selection.id));
+    }
+    setSelectedLineKey("");
+    setLineMenu(null);setEdit(null);
+    setInfo("Line and its attached label deleted. Undo can restore them.");
+  };
   const screenDown=(e:ReactPointerEvent<HTMLElement>)=>{
     if((e.target as Element).closest(".classroom-instrument"))return;
-    if(!e.isPrimary){gesture.current=null;return;}
+    if(!e.isPrimary){
+      cancelHold();gesture.current=null;return;
+    }
     if(e.button!==0||gesture.current)return;
     const p=pixelFromClient(e.clientX,e.clientY);
+    if(nameTask||lineMenu)return;
+    if(e.pointerType!=="mouse"&&tool==="orbit"&&!edit){
+      const selection=selectDrawnLine(p,true);
+      if(selection){
+        e.preventDefault();e.stopPropagation();
+        cancelHold();
+        const hold:Hold={pointer:e.pointerId,start:p,selection,timer:null,
+          fired:false,cancelled:false,dragged:false};
+        hold.timer=window.setTimeout(()=>{
+          if(holdRef.current!==hold||hold.cancelled)return;
+          hold.fired=true;hold.timer=null;
+          if(selection.endpoint!==null)beginEndpointEdit(selection);
+          else openLineActions(selection,p);
+        },560);
+        holdRef.current=hold;
+        e.currentTarget.setPointerCapture(e.pointerId);
+        return;
+      }
+    }
     const snap=(tool==="pen"||tool==="line")?guided(p):null;
     const useRuler=Boolean(snap);
     const kind:Gesture["kind"]|null=tool==="join"?"join":
@@ -886,6 +1031,22 @@ export function ClassroomApp(){
   };
   const screenMove=(e:ReactPointerEvent<HTMLElement>)=>{
     const p=pixelFromClient(e.clientX,e.clientY);
+    const holding=holdRef.current;
+    if(holding&&holding.pointer===e.pointerId){
+      e.preventDefault();e.stopPropagation();
+      if(pressHasMoved(holding.start,p)){
+        if(!holding.fired){
+          holding.cancelled=true;
+          if(holding.timer!==null)window.clearTimeout(holding.timer);
+          holding.timer=null;
+        }else if(holding.selection.endpoint!==null){
+          if(!holding.dragged){snapshot();holding.dragged=true;}
+          moveEditAtPixel({kind:holding.selection.kind,id:holding.selection.id,
+            endpoint:holding.selection.endpoint},p);
+        }
+      }
+      return;
+    }
     if(tool==="eraser")setEraserCursor(previous=>{
       const next=normalizedFromPixel(p);
       return previous&&dist2([previous[0]*stageSize[0],previous[1]*stageSize[1]],p)<5
@@ -936,11 +1097,23 @@ export function ClassroomApp(){
       g.x=p[0];g.y=p[1];
       setInfo("Erasing only the area beneath the 16px brush.");
     }else if(g.kind==="edit"&&g.dragged&&edit){
-      const point=sphereFromPixel(p);
-      if(point)moveEndpoint(edit,point);
+      moveEditAtPixel(edit,p);
     }
   };
   const screenUp=(e:ReactPointerEvent<HTMLElement>)=>{
+    const holding=holdRef.current;
+    if(holding&&holding.pointer===e.pointerId){
+      const dragged=holding.dragged;
+      cancelHold();
+      if(dragged){
+        setEdit(null);
+        setInfo("Endpoint repositioned by dragging. Undo restores its previous location.");
+      }
+      e.preventDefault();e.stopPropagation();
+      if(e.currentTarget.hasPointerCapture(e.pointerId))
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      return;
+    }
     const g=gesture.current;
     if(!g||g.pointer!==e.pointerId)return;
     const p=pixelFromClient(e.clientX,e.clientY);
@@ -977,36 +1150,40 @@ export function ClassroomApp(){
     }else if(g.kind==="free-line"||g.kind==="free-multi"){
       if(!g.dragged)addFreePoint(normalizedFromPixel(g.guide?rulerProject(p,rulerPose):p));
     }else if(g.kind==="edit"&&edit){
-      const point=sphereFromPixel(p);
-      if(point)moveEndpoint(edit,point);
-      setEdit(null);
-      setInfo("Endpoint moved to exact pointer location.");
+      if(moveEditAtPixel(edit,p)){
+        setEdit(null);
+        setInfo("Endpoint moved to the chosen position. Undo restores it.");
+      }else{
+        setInfo("Could not resolve the destination. Tap a visible position to finish editing.");
+      }
     }
     gesture.current=null;
     if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);
   };
+  const screenCancel=(e:ReactPointerEvent<HTMLElement>)=>{
+    if(holdRef.current?.pointer===e.pointerId)cancelHold();
+    if(gesture.current?.pointer===e.pointerId){
+      gesture.current=null;
+      setDrawing(null);setHollowPenDraft([]);hollowDraftRef.current=[];
+    }
+  };
   const screenDoubleClick=(e:ReactMouseEvent<HTMLElement>)=>{
-    if(!cameraRef.current||tool==="eraser"||tool==="join")return;
-    const p=pixelFromClient(e.clientX,e.clientY);
-    let best:{id:string;index:0|1;distance:number}|null=null;
-    for(const mark of marks){
-      if(!mark.anchorA||!mark.anchorB)continue;
-      for(const [index,anchor] of ([mark.anchorA,mark.anchorB] as const).entries()){
-        if(!visiblePoint(anchor,cameraRef.current,view,showSphere))continue;
-        const pos=projectPoint(anchor,cameraRef.current,stageSize[0],stageSize[1]);
-        if(!pos)continue;
-        const distance=dist2(pos,p);
-        if(distance<22&&(!best||distance<best.distance))best={id:mark.id,index:index as 0|1,distance};
-      }
-    }
-    if(best){
-      e.stopPropagation();
-      onBeginEdit(best.id,best.index);
-      setPending(null);
-      setPendingScreen(null);
-      setPendingVertices([]);
-      setPendingScreenVertices([]);
-    }
+    // Select mode prevents double clicks from creating or erasing drawings.
+    if(tool!=="orbit"||nameTask||lineMenu)return;
+    const pixel=pixelFromClient(e.clientX,e.clientY);
+    const selection=selectDrawnLine(pixel,false);
+    if(!selection)return;
+    e.preventDefault();e.stopPropagation();
+    openLineActions(selection,pixel);
+  };
+  const screenContextMenu=(e:ReactMouseEvent<HTMLElement>)=>{
+    if(tool!=="orbit")return;
+    // Prevent Android's native press-selection menu from covering our own.
+    e.preventDefault();
+    if(holdRef.current||edit||lineMenu||nameTask)return;
+    const pixel=pixelFromClient(e.clientX,e.clientY);
+    const selection=selectDrawnLine(pixel,false);
+    if(selection){e.stopPropagation();openLineActions(selection,pixel);}
   };
   /** Commit protractor rays and angle to the board as editable/erasable screen ink. */
   const addInstrumentAngle=(instrument:AngleDrawing)=>{
@@ -1091,7 +1268,7 @@ export function ClassroomApp(){
   const clear=()=>{
     if(!marks.length&&!strokes.length&&!texts.length&&!pending&&!pendingScreen&&!pendingVertices.length&&!pendingScreenVertices.length)return;
     if(!window.confirm("Clear all classroom drawings?"))return;
-    snapshot();setNameTask(null);setMarks([]);setStrokes([]);setTexts([]);setJoinFrom(null);setPending(null);setPendingScreen(null);setPendingVertices([]);setPendingScreenVertices([]);setDrawing(null);setEdit(null);
+    snapshot();cancelHold();setLineMenu(null);setNameTask(null);setMarks([]);setStrokes([]);setTexts([]);setJoinFrom(null);setPending(null);setPendingScreen(null);setPendingVertices([]);setPendingScreenVertices([]);setDrawing(null);setEdit(null);
     setInfo("Teacher drawings cleared; the original astronomical circles remain.");
   };
 
@@ -1102,6 +1279,7 @@ export function ClassroomApp(){
     setSeasons(data.seasons);setShowSphere(data.showSphere);setShowNames(data.showNames);
     setView(data.view);setShape(data.shape);setPlacement(data.placement);
     setColor(data.color);setHexDraft(data.color);setWidth(data.width);
+    cancelHold();setLineMenu(null);setEdit(null);
     setNameTask(null);setNameDraft("");setSelectedLineKey("");
     setMarks(data.marks);setStrokes(data.strokes);setTexts(data.texts);
     setHistory([]);setFuture([]);chooseTool("orbit");
@@ -1174,6 +1352,7 @@ export function ClassroomApp(){
   };
   const newProject=()=>{
     if(!window.confirm("Start a new classroom? Export or Save any unsaved changes first."))return;
+    cancelHold();setLineMenu(null);setEdit(null);
     setNameTask(null);setNameDraft("");setSelectedLineKey("");
     setMarks([]);setStrokes([]);setTexts([]);setHistory([]);setFuture([]);
     setVisible(DEFAULT_VISIBLE);setSeasons(SEASONS.map(x=>x.longitude));
@@ -1200,7 +1379,8 @@ export function ClassroomApp(){
     </header>
     <section ref={stageRef} className="classroom-stage" aria-label="Interactive celestial sphere"
       onPointerDownCapture={screenDown} onPointerMoveCapture={screenMove} onPointerUpCapture={screenUp}
-      onPointerCancelCapture={screenUp} onDoubleClickCapture={screenDoubleClick}
+      onPointerCancelCapture={screenCancel} onDoubleClickCapture={screenDoubleClick}
+      onContextMenuCapture={screenContextMenu}
       onPointerLeave={()=>setEraserCursor(null)}>
       <Canvas className="classroom-canvas" frameloop="demand" dpr={lite?1:[1,1.6]}
         gl={{alpha:true,antialias:!lite,powerPreference:lite?"low-power":"high-performance"}}
@@ -1209,8 +1389,7 @@ export function ClassroomApp(){
         <Sphere geometry={teachingGeometry} sky={classroomSky} lite={lite}
           zenith={zenith} nadir={nadir} directions={directions} seasons={seasons}
           marks={marks} texts={texts} pending={pending} tool={tool} color={color} view={view} cmd={cmd}
-          showSphere={showSphere} showNames={showNames} edit={edit} draft={hollowPenDraft}
-          onBeginEdit={onBeginEdit}/>
+          showSphere={showSphere} showNames={showNames} edit={edit} draft={hollowPenDraft}/>
       </Canvas>
       <svg className="classroom-ink-layer" width="100%" height="100%"
         viewBox={"0 0 "+stageSize[0]+" "+stageSize[1]} preserveAspectRatio="none"
@@ -1225,6 +1404,12 @@ export function ClassroomApp(){
           {line.measure&&<text x={line.measure.x*stageSize[0]} y={line.measure.y*stageSize[1]-11}
             fill="#fff1ae" fontSize={14} fontWeight="700" textAnchor="middle">{line.measure.label}</text>}
         </g>)}
+        {edit?.kind==="stroke"&&(()=>{
+          const line=strokes.find(item=>item.id===edit.id);
+          const point=line?.points[edit.endpoint===0?0:line.points.length-1];
+          return point&&<circle cx={point[0]*stageSize[0]} cy={point[1]*stageSize[1]}
+            r={12} fill="rgba(255,241,156,.32)" stroke="#fff19c" strokeWidth={3}/>;
+        })()}
         {selectedJoinPoint&&<circle cx={selectedJoinPoint[0]} cy={selectedJoinPoint[1]}
           r={12} fill="rgba(255,211,96,.3)" stroke="#ffd260" strokeWidth={3}/>}
         {pendingScreen&&<circle cx={pendingScreen[0]*stageSize[0]} cy={pendingScreen[1]*stageSize[1]} r={7}
@@ -1365,6 +1550,9 @@ export function ClassroomApp(){
         <p className="classroom-hint">After finishing any drawn line, you can attach a name or
           finish without a name. Names follow 3D lines when the globe rotates and are
           saved with your project. You can also rename older lines here.</p>
+        <p className="classroom-hint">Quick actions: choose Select, then touch and hold a
+          line for Delete / Edit Label. On a PC, double-click the line.
+          Hold an endpoint on touch to drag it or tap a new position.</p>
         <label className="classroom-project-label">Choose a drawn line
           <select aria-label="Select line to add, edit or remove its name" value={selectedLineKey}
             onChange={e=>setSelectedLineKey(e.target.value)}>
@@ -1514,9 +1702,41 @@ export function ClassroomApp(){
       <div className="classroom-actions">
         <button onClick={undo} disabled={!edit&&!pending&&!pendingScreen&&!pendingVertices.length&&!pendingScreenVertices.length&&!history.length}><Undo2 size={15}/> Undo</button>
         <button onClick={clear} disabled={!pending&&!pendingScreen&&!pendingVertices.length&&!pendingScreenVertices.length&&marks.length===0&&strokes.length===0&&texts.length===0}><Eraser size={15}/> Clear</button>
-        <button onClick={()=>{setNameTask(null);setSelectedLineKey("");setNameDraft("");setMarks([]);setStrokes([]);setTexts([]);setJoinFrom(null);setHistory([]);setFuture([]);setCompassVisible(false);setPending(null);setPendingScreen(null);setPendingVertices([]);setPendingScreenVertices([]);setEdit(null);setShowSphere(true);setShowNames(true);setRulerVisible(false);setProtractorVisible(false);setVisible(DEFAULT_VISIBLE);setSeasons(SEASONS.map(s=>s.longitude));setZenith(true);setNadir(true);setDirections(true);setView("outside");setCmd(old=>({number:old.number+1,dir:[0,0,1]}));setShape(true);chooseTool("orbit");}}><RotateCcw size={15}/> Reset</button>
+        <button onClick={()=>{cancelHold();setLineMenu(null);setNameTask(null);setSelectedLineKey("");setNameDraft("");setMarks([]);setStrokes([]);setTexts([]);setJoinFrom(null);setHistory([]);setFuture([]);setCompassVisible(false);setPending(null);setPendingScreen(null);setPendingVertices([]);setPendingScreenVertices([]);setEdit(null);setShowSphere(true);setShowNames(true);setRulerVisible(false);setProtractorVisible(false);setVisible(DEFAULT_VISIBLE);setSeasons(SEASONS.map(s=>s.longitude));setZenith(true);setNadir(true);setDirections(true);setView("outside");setCmd(old=>({number:old.number+1,dir:[0,0,1]}));setShape(true);chooseTool("orbit");}}><RotateCcw size={15}/> Reset</button>
       </div>
     </aside>
+    {edit&&!nameTask&&<div className="classroom-endpoint-banner" role="status">
+      <span><strong>Editing line endpoint</strong>
+        {" · Drag the selected point or tap a new position"}
+      </span>
+      <button type="button" onClick={()=>{setEdit(null);setInfo("Endpoint editing canceled.");}}>
+        <X size={15}/> Cancel
+      </button>
+    </div>}
+    {lineMenu&&contextualLine&&<div className="classroom-line-menu-backdrop"
+      onClick={()=>setLineMenu(null)}>
+      <div className="classroom-line-menu" role="dialog" aria-modal="true"
+        aria-labelledby="classroom-line-action-title"
+        onClick={e=>e.stopPropagation()}
+        onKeyDown={e=>{if(e.key==="Escape"){e.preventDefault();setLineMenu(null);}}}>
+        <span className="classroom-line-menu-kicker">SELECTED DRAWING</span>
+        <h2 id="classroom-line-action-title">{contextualLine.name||"Unnamed line"}</h2>
+        <p>{lineMenu.selection.kind==="mark"?"3D line":"Whiteboard line"}
+          {" · Choose an action"}</p>
+        <button type="button" autoFocus onClick={contextualEditLabel}>
+          <Pencil size={18}/> {contextualLine.name?"Edit label":"Add label"}
+        </button>
+        {lineMenu.selection.endpoint!==null&&<button type="button" onClick={()=>{
+          const selection=lineMenu.selection;
+          setLineMenu(null);beginEndpointEdit(selection);
+        }}><MousePointer2 size={18}/> Edit this endpoint</button>}
+        <button type="button" className="classroom-line-menu-delete"
+          onClick={contextualDelete}><Trash2 size={18}/> Delete line</button>
+        <button type="button" className="classroom-line-menu-cancel"
+          onClick={()=>setLineMenu(null)}><X size={18}/> Cancel</button>
+        <small>Deleting is reversible with Undo; a line's label is linked to its drawing.</small>
+      </div>
+    </div>}
     {nameTask&&<div className="classroom-name-backdrop">
       <form className="classroom-name-dialog" role="dialog" aria-modal="true"
         aria-labelledby="classroom-name-title"
