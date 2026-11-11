@@ -354,7 +354,7 @@ function MarkLine({mark,view,showSphere,edit,onBeginEdit}:{mark:Mark;view:View;s
       return <mesh key={index} position={position}
         onPointerDown={e=>e.stopPropagation()}
         onPointerUp={e=>e.stopPropagation()}
-        onDoubleClick={e=>{e.stopPropagation();onBeginEdit(mark.id,index as 0|1);}}>
+        >
         <sphereGeometry args={[active?0.038:0.026,16,16]}/>
         <meshBasicMaterial color={active?"#fff568":mark.color} transparent opacity={active?1:0.94} depthTest={false}/>
       </mesh>;
@@ -976,9 +976,30 @@ export function ClassroomApp(){
   };
   const screenDown=(e:ReactPointerEvent<HTMLElement>)=>{
     if((e.target as Element).closest(".classroom-instrument"))return;
-    if(!e.isPrimary){gesture.current=null;return;}
+    if(!e.isPrimary){
+      cancelHold();gesture.current=null;return;
+    }
     if(e.button!==0||gesture.current)return;
     const p=pixelFromClient(e.clientX,e.clientY);
+    if(nameTask||lineMenu)return;
+    if(e.pointerType!=="mouse"&&tool==="orbit"&&!edit){
+      const selection=selectDrawnLine(p,true);
+      if(selection){
+        e.preventDefault();e.stopPropagation();
+        cancelHold();
+        const hold:Hold={pointer:e.pointerId,start:p,selection,timer:null,
+          fired:false,cancelled:false,dragged:false};
+        hold.timer=window.setTimeout(()=>{
+          if(holdRef.current!==hold||hold.cancelled)return;
+          hold.fired=true;hold.timer=null;
+          if(selection.endpoint!==null)beginEndpointEdit(selection);
+          else openLineActions(selection,p);
+        },560);
+        holdRef.current=hold;
+        e.currentTarget.setPointerCapture(e.pointerId);
+        return;
+      }
+    }
     const snap=(tool==="pen"||tool==="line")?guided(p):null;
     const useRuler=Boolean(snap);
     const kind:Gesture["kind"]|null=tool==="join"?"join":
@@ -1009,6 +1030,22 @@ export function ClassroomApp(){
   };
   const screenMove=(e:ReactPointerEvent<HTMLElement>)=>{
     const p=pixelFromClient(e.clientX,e.clientY);
+    const holding=holdRef.current;
+    if(holding&&holding.pointer===e.pointerId){
+      e.preventDefault();e.stopPropagation();
+      if(pressHasMoved(holding.start,p)){
+        if(!holding.fired){
+          holding.cancelled=true;
+          if(holding.timer!==null)window.clearTimeout(holding.timer);
+          holding.timer=null;
+        }else if(holding.selection.endpoint!==null){
+          if(!holding.dragged){snapshot();holding.dragged=true;}
+          moveEditAtPixel({kind:holding.selection.kind,id:holding.selection.id,
+            endpoint:holding.selection.endpoint},p);
+        }
+      }
+      return;
+    }
     if(tool==="eraser")setEraserCursor(previous=>{
       const next=normalizedFromPixel(p);
       return previous&&dist2([previous[0]*stageSize[0],previous[1]*stageSize[1]],p)<5
@@ -1059,11 +1096,23 @@ export function ClassroomApp(){
       g.x=p[0];g.y=p[1];
       setInfo("Erasing only the area beneath the 16px brush.");
     }else if(g.kind==="edit"&&g.dragged&&edit){
-      const point=sphereFromPixel(p);
-      if(point)moveEndpoint(edit,point);
+      moveEditAtPixel(edit,p);
     }
   };
   const screenUp=(e:ReactPointerEvent<HTMLElement>)=>{
+    const holding=holdRef.current;
+    if(holding&&holding.pointer===e.pointerId){
+      const dragged=holding.dragged;
+      cancelHold();
+      if(dragged){
+        setEdit(null);
+        setInfo("Endpoint repositioned by dragging. Undo restores its previous location.");
+      }
+      e.preventDefault();e.stopPropagation();
+      if(e.currentTarget.hasPointerCapture(e.pointerId))
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      return;
+    }
     const g=gesture.current;
     if(!g||g.pointer!==e.pointerId)return;
     const p=pixelFromClient(e.clientX,e.clientY);
@@ -1100,36 +1149,31 @@ export function ClassroomApp(){
     }else if(g.kind==="free-line"||g.kind==="free-multi"){
       if(!g.dragged)addFreePoint(normalizedFromPixel(g.guide?rulerProject(p,rulerPose):p));
     }else if(g.kind==="edit"&&edit){
-      const point=sphereFromPixel(p);
-      if(point)moveEndpoint(edit,point);
-      setEdit(null);
-      setInfo("Endpoint moved to exact pointer location.");
+      if(moveEditAtPixel(edit,p)){
+        setEdit(null);
+        setInfo("Endpoint moved to the chosen position. Undo restores it.");
+      }else{
+        setInfo("Could not resolve the destination. Tap a visible position to finish editing.");
+      }
     }
     gesture.current=null;
     if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);
   };
+  const screenCancel=(e:ReactPointerEvent<HTMLElement>)=>{
+    if(holdRef.current?.pointer===e.pointerId)cancelHold();
+    if(gesture.current?.pointer===e.pointerId){
+      gesture.current=null;
+      setDrawing(null);setHollowPenDraft([]);hollowDraftRef.current=[];
+    }
+  };
   const screenDoubleClick=(e:ReactMouseEvent<HTMLElement>)=>{
-    if(!cameraRef.current||tool==="eraser"||tool==="join")return;
-    const p=pixelFromClient(e.clientX,e.clientY);
-    let best:{id:string;index:0|1;distance:number}|null=null;
-    for(const mark of marks){
-      if(!mark.anchorA||!mark.anchorB)continue;
-      for(const [index,anchor] of ([mark.anchorA,mark.anchorB] as const).entries()){
-        if(!visiblePoint(anchor,cameraRef.current,view,showSphere))continue;
-        const pos=projectPoint(anchor,cameraRef.current,stageSize[0],stageSize[1]);
-        if(!pos)continue;
-        const distance=dist2(pos,p);
-        if(distance<22&&(!best||distance<best.distance))best={id:mark.id,index:index as 0|1,distance};
-      }
-    }
-    if(best){
-      e.stopPropagation();
-      onBeginEdit(best.id,best.index);
-      setPending(null);
-      setPendingScreen(null);
-      setPendingVertices([]);
-      setPendingScreenVertices([]);
-    }
+    // Select mode prevents double clicks from creating or erasing drawings.
+    if(tool!=="orbit"||nameTask||lineMenu)return;
+    const pixel=pixelFromClient(e.clientX,e.clientY);
+    const selection=selectDrawnLine(pixel,false);
+    if(!selection)return;
+    e.preventDefault();e.stopPropagation();
+    openLineActions(selection,pixel);
   };
   /** Commit protractor rays and angle to the board as editable/erasable screen ink. */
   const addInstrumentAngle=(instrument:AngleDrawing)=>{
@@ -1323,7 +1367,7 @@ export function ClassroomApp(){
     </header>
     <section ref={stageRef} className="classroom-stage" aria-label="Interactive celestial sphere"
       onPointerDownCapture={screenDown} onPointerMoveCapture={screenMove} onPointerUpCapture={screenUp}
-      onPointerCancelCapture={screenUp} onDoubleClickCapture={screenDoubleClick}
+      onPointerCancelCapture={screenCancel} onDoubleClickCapture={screenDoubleClick}
       onPointerLeave={()=>setEraserCursor(null)}>
       <Canvas className="classroom-canvas" frameloop="demand" dpr={lite?1:[1,1.6]}
         gl={{alpha:true,antialias:!lite,powerPreference:lite?"low-power":"high-performance"}}
