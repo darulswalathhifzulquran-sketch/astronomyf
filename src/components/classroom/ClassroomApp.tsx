@@ -1219,7 +1219,7 @@ export function ClassroomApp(){
           <path d={inkPath(line.points,stageSize)} fill="none" stroke={line.color}
             strokeWidth={line.width*1.8} strokeLinecap="round" strokeLinejoin="round"/>
           {line.name&&(()=>{const p=lineLabelPoint2D(line.points,stageSize[0],stageSize[1]);
-            return p&&<text x={p[0]*stageSize[0]} y={p[1]*stageSize[1]-17}
+            return p&&<text x={p[0]*stageSize[0]} y={p[1]*stageSize[1]-(line.measure?32:17)}
               className="classroom-ink-name" direction="auto" textAnchor="middle">{line.name}</text>;
           })()}
           {line.measure&&<text x={line.measure.x*stageSize[0]} y={line.measure.y*stageSize[1]-11}
