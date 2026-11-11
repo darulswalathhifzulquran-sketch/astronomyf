@@ -1091,7 +1091,7 @@ export function ClassroomApp(){
   const clear=()=>{
     if(!marks.length&&!strokes.length&&!texts.length&&!pending&&!pendingScreen&&!pendingVertices.length&&!pendingScreenVertices.length)return;
     if(!window.confirm("Clear all classroom drawings?"))return;
-    snapshot();setMarks([]);setStrokes([]);setTexts([]);setJoinFrom(null);setPending(null);setPendingScreen(null);setPendingVertices([]);setPendingScreenVertices([]);setDrawing(null);setEdit(null);
+    snapshot();setNameTask(null);setMarks([]);setStrokes([]);setTexts([]);setJoinFrom(null);setPending(null);setPendingScreen(null);setPendingVertices([]);setPendingScreenVertices([]);setDrawing(null);setEdit(null);
     setInfo("Teacher drawings cleared; the original astronomical circles remain.");
   };
 
@@ -1102,6 +1102,7 @@ export function ClassroomApp(){
     setSeasons(data.seasons);setShowSphere(data.showSphere);setShowNames(data.showNames);
     setView(data.view);setShape(data.shape);setPlacement(data.placement);
     setColor(data.color);setHexDraft(data.color);setWidth(data.width);
+    setNameTask(null);setNameDraft("");setSelectedLineKey("");
     setMarks(data.marks);setStrokes(data.strokes);setTexts(data.texts);
     setHistory([]);setFuture([]);chooseTool("orbit");
     setCmd(old=>({number:old.number+1,dir:[0,0,1]}));
@@ -1173,6 +1174,7 @@ export function ClassroomApp(){
   };
   const newProject=()=>{
     if(!window.confirm("Start a new classroom? Export or Save any unsaved changes first."))return;
+    setNameTask(null);setNameDraft("");setSelectedLineKey("");
     setMarks([]);setStrokes([]);setTexts([]);setHistory([]);setFuture([]);
     setVisible(DEFAULT_VISIBLE);setSeasons(SEASONS.map(x=>x.longitude));
     setZenith(true);setNadir(true);setDirections(true);setShowSphere(true);setShowNames(true);
@@ -1358,6 +1360,32 @@ export function ClassroomApp(){
         <p className="classroom-hint">Projects stay in this browser until deleted or browser data is cleared.
           Export JSON to back up or move a project to another device.</p>
       </div>
+      <div className="classroom-tool-section classroom-line-name-section">
+        <div className="classroom-section-title"><Type size={15}/> Names on drawn lines</div>
+        <p className="classroom-hint">After finishing any drawn line, you can attach a name or
+          finish without a name. Names follow 3D lines when the globe rotates and are
+          saved with your project. You can also rename older lines here.</p>
+        <label className="classroom-project-label">Choose a drawn line
+          <select aria-label="Select line to add, edit or remove its name" value={selectedLineKey}
+            onChange={e=>setSelectedLineKey(e.target.value)}>
+            <option value="">Select a drawn line...</option>
+            {marks.map((mark,i)=><option key={"mark:"+mark.id} value={"mark:"+mark.id}>
+              {mark.name||("3D line "+(i+1)+" (unnamed)")}
+            </option>)}
+            {strokes.map((stroke,i)=><option key={"stroke:"+stroke.id} value={"stroke:"+stroke.id}>
+              {stroke.name||("Whiteboard line "+(i+1)+" (unnamed)")}
+            </option>)}
+          </select>
+        </label>
+        <div className="classroom-project-actions">
+          <button type="button" disabled={!selectedLine} onClick={editSelectedLineName}>
+            <Pencil size={15}/> {selectedLine?.name?"Rename":"Add name"}
+          </button>
+          <button type="button" disabled={!selectedLine?.name} onClick={removeSelectedLineName}>
+            <Trash2 size={15}/> Remove name
+          </button>
+        </div>
+      </div>
       <div className="classroom-tool-section classroom-text-section">
         <div className="classroom-section-title"><Type size={15}/> 3D Text</div>
         <label className="classroom-project-label">Label (Arabic / English)
@@ -1486,9 +1514,39 @@ export function ClassroomApp(){
       <div className="classroom-actions">
         <button onClick={undo} disabled={!edit&&!pending&&!pendingScreen&&!pendingVertices.length&&!pendingScreenVertices.length&&!history.length}><Undo2 size={15}/> Undo</button>
         <button onClick={clear} disabled={!pending&&!pendingScreen&&!pendingVertices.length&&!pendingScreenVertices.length&&marks.length===0&&strokes.length===0&&texts.length===0}><Eraser size={15}/> Clear</button>
-        <button onClick={()=>{setMarks([]);setStrokes([]);setTexts([]);setJoinFrom(null);setHistory([]);setFuture([]);setCompassVisible(false);setPending(null);setPendingScreen(null);setPendingVertices([]);setPendingScreenVertices([]);setEdit(null);setShowSphere(true);setShowNames(true);setRulerVisible(false);setProtractorVisible(false);setVisible(DEFAULT_VISIBLE);setSeasons(SEASONS.map(s=>s.longitude));setZenith(true);setNadir(true);setDirections(true);setView("outside");setCmd(old=>({number:old.number+1,dir:[0,0,1]}));setShape(true);chooseTool("orbit");}}><RotateCcw size={15}/> Reset</button>
+        <button onClick={()=>{setNameTask(null);setSelectedLineKey("");setNameDraft("");setMarks([]);setStrokes([]);setTexts([]);setJoinFrom(null);setHistory([]);setFuture([]);setCompassVisible(false);setPending(null);setPendingScreen(null);setPendingVertices([]);setPendingScreenVertices([]);setEdit(null);setShowSphere(true);setShowNames(true);setRulerVisible(false);setProtractorVisible(false);setVisible(DEFAULT_VISIBLE);setSeasons(SEASONS.map(s=>s.longitude));setZenith(true);setNadir(true);setDirections(true);setView("outside");setCmd(old=>({number:old.number+1,dir:[0,0,1]}));setShape(true);chooseTool("orbit");}}><RotateCcw size={15}/> Reset</button>
       </div>
     </aside>
+    {nameTask&&<div className="classroom-name-backdrop">
+      <form className="classroom-name-dialog" role="dialog" aria-modal="true"
+        aria-labelledby="classroom-name-title"
+        onSubmit={e=>{e.preventDefault();finishLineName(true);}}
+        onKeyDown={e=>{if(e.key==="Escape"){e.preventDefault();finishLineName(false);}}}>
+        <span className="classroom-name-kicker">{nameTask.editing?"EDIT LINE":"DRAWING FINISHED"}</span>
+        <h2 id="classroom-name-title">{nameTask.editing?"Edit line name":"Name this line?"}</h2>
+        <p className="classroom-name-description">
+          {nameTask.editing
+            ?"Change this line's attached name, or Cancel to keep its old name."
+            :"The line is already drawn. Add a 3D-positioned name, or finish without one."}
+          {nameTask.ids.length>1&&<strong className="classroom-name-progress">
+            {" Line "+(nameTask.index+1)+" of "+nameTask.ids.length}
+          </strong>}
+        </p>
+        <label htmlFor="classroom-line-name-input">Optional line name · عربي / മലയാളം / English</label>
+        <input id="classroom-line-name-input" ref={nameInputRef} type="text" dir="auto"
+          maxLength={80} autoComplete="off" placeholder="e.g. مُعَدِّلُ النَّهَارِ"
+          value={nameDraft} onChange={e=>setNameDraft(e.target.value)}/>
+        <div className="classroom-name-actions">
+          <button type="button" className="classroom-name-skip" onClick={()=>finishLineName(false)}>
+            {nameTask.editing?"Cancel":"Skip name · Finish"}
+          </button>
+          <button type="submit" className="classroom-name-confirm"
+            disabled={!cleanLineName(nameDraft)}>
+            <Check size={16}/> {nameTask.editing?"Update name":"Save name"}
+          </button>
+        </div>
+      </form>
+    </div>}
     <div className="classroom-action-status" role="status" aria-live="polite">{info}</div>
   </main>;
 }
