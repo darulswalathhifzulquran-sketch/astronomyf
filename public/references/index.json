@@ -1,0 +1,212 @@
+[
+  {
+    "number": 1,
+    "file": "01_equator.png",
+    "name_ar": "مُعَدِّلُ النَّهَارِ",
+    "name_ml": "ഖഗോള മധ്യരേഖ",
+    "type": "great"
+  },
+  {
+    "number": 2,
+    "file": "02_ecliptic.png",
+    "name_ar": "مِنْطَقَةُ الْبُرُوجِ",
+    "name_ml": "ക്രാന്തിവൃത്തം",
+    "type": "great"
+  },
+  {
+    "number": 3,
+    "file": "03_four_poles.png",
+    "name_ar": "دَائِرَةُ الْمَارَّةُ بِالْأَقْطَابِ الْأَرْبَعَةِ",
+    "name_ml": "നാല് ധ്രുവങ്ങളിലൂടെ കടക്കുന്ന വൃത്തം",
+    "type": "great"
+  },
+  {
+    "number": 4,
+    "file": "04_declination.png",
+    "name_ar": "دَائِرَةُ الْمَيْلِ",
+    "name_ml": "ഡെക്ലിനേഷൻ അളക്കുന്ന വൃത്തം",
+    "type": "great"
+  },
+  {
+    "number": 5,
+    "file": "05_latitude.png",
+    "name_ar": "دَائِرَةُ الْعَرْضِ",
+    "name_ml": "ക്രാന്തിവൃത്ത അക്ഷാംശവൃത്തം",
+    "type": "great"
+  },
+  {
+    "number": 6,
+    "file": "06_horizon.png",
+    "name_ar": "دَائِرَةُ الْأُفُقِ",
+    "name_ml": "ചക്രവാളവൃത്തം",
+    "type": "great"
+  },
+  {
+    "number": 7,
+    "file": "07_meridian.png",
+    "name_ar": "دَائِرَةُ نِصْفِ النَّهَارِ",
+    "name_ml": "മധ്യാഹ്നവൃത്തം",
+    "type": "great"
+  },
+  {
+    "number": 8,
+    "file": "08_first_vertical.png",
+    "name_ar": "دَائِرَةُ أَوَّلِ السُّمُوتِ",
+    "name_ml": "പ്രഥമ ദിശാവൃത്തം",
+    "type": "great"
+  },
+  {
+    "number": 9,
+    "file": "09_mid_sky.png",
+    "name_ar": "دَائِرَةُ وَسَطِ سَمَاءِ الرُّؤْيَةِ",
+    "name_ml": "ദൃശ്യാകാശത്തിന്റെ മധ്യവൃത്തം",
+    "type": "great"
+  },
+  {
+    "number": 10,
+    "file": "10_altitude.png",
+    "name_ar": "دَائِرَةُ الِارْتِفَاعِ",
+    "name_ml": "ഉയരവൃത്തം",
+    "type": "great"
+  },
+  {
+    "number": 11,
+    "file": "11_daily_circles.png",
+    "name_ar": "الْمَدَارَاتُ الْيَوْمِيَّةُ",
+    "name_ml": "ദൈനംദിന സഞ്ചാരവൃത്തങ്ങൾ",
+    "type": "small"
+  },
+  {
+    "number": 12,
+    "file": "12_latitude_circles.png",
+    "name_ar": "مَدَارَاتُ الْعَرْضِ",
+    "name_ml": "ക്രാന്തിവൃത്തത്തിന് സമാന്തരവൃത്തങ്ങൾ",
+    "type": "small"
+  },
+  {
+    "number": 13,
+    "file": "13_almucantars.png",
+    "name_ar": "الْمُقَنْطَرَاتُ",
+    "name_ml": "സമഉയര വൃത്തങ്ങൾ",
+    "type": "small"
+  },
+  {
+    "number": 14,
+    "file": "14_obliquity.png",
+    "name_ar": "الْمَيْلُ الْكُلِّيُّ",
+    "name_ml": "പൂർണ്ണ ചരിവിന്റെ ചാപം",
+    "type": "arc"
+  },
+  {
+    "number": 15,
+    "file": "15_first_declination.png",
+    "name_ar": "الْمَيْلُ الْأَوَّلُ",
+    "name_ml": "ആദ്യ ചരിവ്",
+    "type": "arc"
+  },
+  {
+    "number": 16,
+    "file": "16_second_declination.png",
+    "name_ar": "الْمَيْلُ الثَّانِي",
+    "name_ml": "രണ്ടാം ചരിവ്",
+    "type": "arc"
+  },
+  {
+    "number": 17,
+    "file": "17_star_declination.png",
+    "name_ar": "بُعْدُ الْكَوْكَبِ",
+    "name_ml": "നക്ഷത്രത്തിന്റെ ഡെക്ലിനേഷൻ",
+    "type": "arc"
+  },
+  {
+    "number": 18,
+    "file": "18_star_latitude.png",
+    "name_ar": "عَرْضُ الْكَوْكَبِ",
+    "name_ml": "നക്ഷത്രത്തിന്റെ ക്രാന്തിവൃത്ത അക്ഷാംശം",
+    "type": "arc"
+  },
+  {
+    "number": 19,
+    "file": "19_geographic_latitude.png",
+    "name_ar": "عَرْضُ الْبَلَدِ",
+    "name_ml": "സ്ഥലത്തിന്റെ അക്ഷാംശം",
+    "type": "arc"
+  },
+  {
+    "number": 20,
+    "file": "20_geographic_longitude.png",
+    "name_ar": "طُولُ الْبَلَدِ",
+    "name_ml": "സ്ഥലത്തിന്റെ രേഖാംശം",
+    "type": "arc"
+  },
+  {
+    "number": 21,
+    "file": "21_rising_amplitude.png",
+    "name_ar": "سَعَةُ الْمَشْرِقِ",
+    "name_ml": "ഉദയസ്ഥാനത്തിന്റെ വ്യതിയാനം",
+    "type": "arc"
+  },
+  {
+    "number": 22,
+    "file": "22_setting_amplitude.png",
+    "name_ar": "سَعَةُ الْمَغْرِبِ",
+    "name_ml": "അസ്തമയസ്ഥാനത്തിന്റെ വ്യതിയാനം",
+    "type": "arc"
+  },
+  {
+    "number": 23,
+    "file": "23_altitude_arc.png",
+    "name_ar": "قَوْسُ الِارْتِفَاعِ",
+    "name_ml": "ഉയരചാപം",
+    "type": "arc"
+  },
+  {
+    "number": 24,
+    "file": "24_depression_arc.png",
+    "name_ar": "قَوْسُ الِانْحِطَاطِ",
+    "name_ml": "താഴ്ചയുടെ ചാപം",
+    "type": "arc"
+  },
+  {
+    "number": 25,
+    "file": "25_azimuth_arc.png",
+    "name_ar": "قَوْسُ السَّمْتِ",
+    "name_ml": "ദിശാചാപം",
+    "type": "arc"
+  },
+  {
+    "number": 26,
+    "file": "26_day_arc.png",
+    "name_ar": "قَوْسُ النَّهَارِ",
+    "name_ml": "പകൽചാപം",
+    "type": "arc"
+  },
+  {
+    "number": 27,
+    "file": "27_night_arc.png",
+    "name_ar": "قَوْسُ اللَّيْلِ",
+    "name_ml": "രാത്രിചാപം",
+    "type": "arc"
+  },
+  {
+    "number": 28,
+    "file": "28_day_correction.png",
+    "name_ar": "تَعْدِيلُ النَّهَارِ",
+    "name_ml": "ദിനചാപ വ്യത്യാസത്തിന്റെ തിരുത്തൽ",
+    "type": "arc"
+  },
+  {
+    "number": 29,
+    "file": "29_diurnal_arc.png",
+    "name_ar": "الدَّائِرُ",
+    "name_ml": "ദിവസഞ്ചാരത്തിലെ നിലവിലെ ചാപം",
+    "type": "arc"
+  },
+  {
+    "number": 30,
+    "file": "30_visible_sky_latitude.png",
+    "name_ar": "عَرْضُ إِقْلِيمِ الرُّؤْيَةِ",
+    "name_ml": "ദൃശ്യാകാശത്തിന്റെ അക്ഷാംശചാപം",
+    "type": "arc"
+  }
+]

@@ -1,0 +1,1391 @@
+.classroom-root{position:fixed;inset:0;z-index:40;overflow:hidden;background:#fff;color:#1c2d45;font-family:"IBM Plex Sans",system-ui,sans-serif;font-size:13px}
+.classroom-root *{box-sizing:border-box}
+.classroom-root button{cursor:pointer}
+.classroom-root button:disabled{cursor:not-allowed;opacity:.4}
+.classroom-root button:focus-visible,.classroom-root input:focus-visible,.classroom-root a:focus-visible{outline:3px solid #72abf7;outline-offset:2px}
+.classroom-glass{background:rgba(255,255,255,.60);border:1px solid rgba(180,198,224,.55);box-shadow:0 9px 28px rgba(58,88,134,.10),inset 0 1px 0 rgba(255,255,255,.90);-webkit-backdrop-filter:blur(24px) saturate(160%);backdrop-filter:blur(24px) saturate(160%);border-radius:22px}
+.classroom-top{position:absolute;z-index:12;top:15px;left:20px;right:20px;height:66px;display:flex;align-items:center;gap:14px;padding:10px 16px}
+.classroom-back,.classroom-fullscreen{flex:none;display:grid;place-items:center;width:39px;height:39px;border:1px solid rgba(163,183,208,.48);background:rgba(255,255,255,.46);border-radius:13px;color:#3b5577;text-decoration:none}
+.classroom-back:hover,.classroom-fullscreen:hover{background:rgba(227,238,255,.8)}
+.classroom-title{min-width:0;display:flex;flex:1;flex-direction:column;gap:2px}
+.classroom-kicker,.classroom-overline{color:#899ab0;font-weight:700;font-size:9px;letter-spacing:.17em}
+.classroom-heading{font-size:17px;letter-spacing:-.03em;font-weight:700;color:#17283d;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.classroom-heading b{font-family:"Amiri",serif;font-size:17px;font-weight:700;color:#42669a;margin-left:7px}
+.classroom-stage{position:absolute;inset:0;background:#fff}
+.classroom-canvas{position:absolute!important;inset:0;touch-action:none}
+.classroom-ink-layer{position:absolute;inset:0;z-index:4;pointer-events:none}
+.classroom-ink-layer.can-draw{pointer-events:auto;cursor:crosshair;touch-action:none}
+.classroom-layers,.classroom-tools{position:absolute;z-index:8;top:96px;bottom:69px;display:flex;flex-direction:column;overflow:hidden;padding:15px}
+.classroom-layers{left:20px;width:291px}
+.classroom-tools{right:20px;width:302px;overflow-y:auto;scrollbar-color:rgba(140,170,200,.45) transparent;scrollbar-width:thin}
+.classroom-panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:9px;padding:2px 2px 14px}
+.classroom-panel-head h2{font-family:"Amiri",serif;color:#233a5a;font-size:20px;font-weight:700;line-height:1.6;margin:1px 0 0}
+.classroom-panel-head .classroom-tool-heading{font-family:"IBM Plex Sans",sans-serif;font-size:18px;line-height:1.35;letter-spacing:-.04em}
+.classroom-panel-head p{font-size:10px;color:#8091a7;margin:0}
+.classroom-tiny{white-space:nowrap;color:#3974bb;font-weight:600;background:#f3f8ff;border:1px solid #d9e7f8;padding:6px 8px;border-radius:9px;font-size:10px}
+.classroom-circle-list{display:flex;flex:1;flex-direction:column;gap:5px;overflow:auto;padding:2px;scrollbar-color:rgba(140,170,200,.43) transparent;scrollbar-width:thin}
+.classroom-circle-row{display:flex;align-items:center;gap:9px;border:1px solid transparent;padding:9px 8px;border-radius:13px;transition:background .18s,border .18s}
+.classroom-circle-row:hover{background:rgba(230,238,251,.65)}
+.classroom-circle-row.active{border-color:#d5e5fb;background:rgba(233,242,255,.75)}
+.classroom-circle-row input{position:absolute;opacity:0;width:1px;height:1px}
+.classroom-circle-row:has(input:focus-visible){outline:2px solid #78abed}
+.classroom-circle-color{flex:none;width:9px;height:30px;border-radius:8px}
+.classroom-circle-label{flex:1;display:flex;min-width:0;flex-direction:column;gap:1px}
+.classroom-circle-label strong{font-family:"Amiri",serif;direction:rtl;text-align:left;color:#2a415d;font-weight:700;font-size:15px;line-height:1.35;overflow-wrap:anywhere}
+.classroom-circle-label small{font-size:10px;color:#94a2b4;line-height:1.4}
+.classroom-circle-check{flex:none;display:grid;place-items:center;width:21px;height:21px;color:#407bd1}
+.classroom-source-note{border-top:1px solid #e2e9f1;padding:11px 4px 2px;margin-top:6px;color:#9aa6b7;font-size:10px;line-height:1.45}
+.classroom-toolstrip{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;background:#edf3fb;padding:5px;border-radius:15px}
+.classroom-tool{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;border:1px solid transparent;border-radius:11px;min-height:58px;color:#68809f;font-size:10px;font-weight:600}
+.classroom-tool.is-active{color:#1665b2;background:rgba(255,255,255,.94);border-color:#d5e4f7;box-shadow:0 3px 9px rgba(47,80,116,.09)}
+.classroom-tool-section{padding:14px 2px 13px;border-bottom:1px solid #e7edf5}
+.classroom-section-title{display:flex;align-items:center;gap:7px;color:#49617f;font-size:11px;font-weight:700;margin-bottom:10px}
+.classroom-swatches{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+.classroom-swatch{height:24px;width:24px;border-radius:50%;border:3px solid white;box-shadow:0 1px 5px rgba(0,0,0,.10)}
+.classroom-swatch.on{outline:2px solid #78a8dc;outline-offset:1px}
+.classroom-color-input{display:grid;place-items:center;width:25px;height:25px;border:1px solid #d4e2f3;border-radius:50%;overflow:hidden;cursor:pointer}
+.classroom-color-input input{width:34px;height:34px;border:0;padding:0;cursor:pointer}
+.classroom-width{display:flex;align-items:center;flex-wrap:wrap;justify-content:space-between;font-size:10px;color:#7389a2;margin-top:14px}
+.classroom-width output{font-variant-numeric:tabular-nums}
+.classroom-width input{width:100%;margin-top:7px;accent-color:#397fce}
+.classroom-segmented{display:flex;background:#edf3fa;border-radius:12px;padding:4px;gap:4px}
+.classroom-segmented button{flex:1;font-size:11px;color:#788da5;padding:8px 7px;border-radius:9px}
+.classroom-segmented button.selected{background:#fff;box-shadow:0 2px 8px rgba(30,68,108,.09);color:#216bad;font-weight:700}
+.classroom-hint{font-size:10px;color:#8999a9;line-height:1.6;margin:9px 3px 0}
+.classroom-toggles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}
+.classroom-toggles button,.classroom-seasons button{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:2px;padding:8px 4px;border:1px solid #e3ebf5;border-radius:10px;color:#94a2b7;background:rgba(255,255,255,.5);min-width:0}
+.classroom-toggles button.on,.classroom-seasons button.on{color:#246bab;background:#e8f2ff;border-color:#c6def8}
+.classroom-toggles button span{font-size:13px;font-family:"Amiri",serif;line-height:1.3}
+.classroom-toggles button small,.classroom-seasons button small{font-size:9px;font-family:"IBM Plex Sans",sans-serif;color:#96a4b6;line-height:1.3}
+.classroom-seasons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.classroom-seasons button{min-height:55px;padding:7px 4px}
+.classroom-seasons strong{font-family:"Amiri",serif;font-size:15px;line-height:1.3}
+.classroom-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:14px 0 0}
+.classroom-actions button{border:1px solid #dfe7f2;border-radius:10px;padding:10px 6px;display:flex;align-items:center;gap:5px;justify-content:center;font-size:11px;color:#526e90;background:rgba(255,255,255,.5)}
+.classroom-actions button:hover:not(:disabled){background:#e9f3ff}
+.classroom-status{position:absolute;z-index:9;left:50%;bottom:14px;transform:translateX(-50%);min-width:260px;max-width:calc(100vw - 24px);display:flex;align-items:center;justify-content:center;gap:8px;padding:11px 16px;color:#66809f;font-size:11px;text-align:center}
+.classroom-status-dot{width:7px;height:7px;background:#4abb9c;border-radius:50%;flex:none}
+.classroom-status button{display:flex;align-items:center;gap:3px;color:#2576ba;font-weight:600}
+.classroom-space-label{font-family:"IBM Plex Sans",sans-serif;white-space:nowrap;user-select:none;text-align:center;text-shadow:0 1px #fff,1px 0 #fff,-1px 0 #fff;line-height:1.15}
+.classroom-space-label strong{font-family:"Amiri",serif;font-size:15px;line-height:1.35;display:block}
+.classroom-space-label small{font-size:9px;display:block;color:#8c9cad}
+.classroom-measure-label{padding:5px 9px;border-radius:9px;border:1px solid #b7d5f4;background:#fff;color:#306db1;font-size:12px;font-weight:700;white-space:nowrap;box-shadow:0 3px 12px rgba(30,68,108,.12)}
+@media(max-width:1050px){
+ .classroom-layers{left:12px;width:235px}
+ .classroom-tools{right:12px;width:256px}
+ .classroom-top{left:12px;right:12px}
+ .classroom-heading{font-size:15px}
+ .classroom-heading b{font-size:15px}
+}
+@media(max-width:760px){
+ .classroom-top{top:8px;height:56px;padding:8px}
+ .classroom-kicker{font-size:8px}
+ .classroom-heading{font-size:13px}
+ .classroom-heading b{display:none}
+ .classroom-layers,.classroom-tools{top:auto;bottom:62px;left:8px;right:8px;width:auto;max-height:43vh;padding:11px;border-radius:18px}
+ .classroom-layers{display:none}
+ .classroom-tools{max-height:43vh}
+ .classroom-circle-list{min-height:0}
+ .classroom-panel-head{padding-bottom:7px}
+ .classroom-status{bottom:8px;padding:8px 10px;white-space:normal;font-size:10px}
+}
+@media(prefers-reduced-motion:reduce){.classroom-circle-row{transition:none}}
+
+.classroom-mobile-tabs{display:none}
+@media(max-width:760px){
+  .classroom-mobile-tabs{display:flex;gap:3px;padding:3px;border-radius:11px;background:#edf4ff;flex:none}
+  .classroom-mobile-tabs button{font-size:10px;padding:6px 9px;border-radius:8px;color:#6380a1}
+  .classroom-mobile-tabs button.selected{background:white;color:#286cba;font-weight:700;box-shadow:0 1px 6px rgba(27,61,110,.13)}
+  .classroom-root[data-panel="layers"] .classroom-layers{display:flex}
+  .classroom-root[data-panel="layers"] .classroom-tools{display:none}
+  .classroom-root[data-panel="tools"] .classroom-layers{display:none}
+  .classroom-root[data-panel="tools"] .classroom-tools{display:flex}
+  .classroom-heading{font-size:12px}
+  .classroom-kicker{letter-spacing:.03em}
+}
+
+
+/* Classroom V2 · dark hemispherical teaching stage with bright glass controls */
+.classroom-v2{background:#060d1c}
+.classroom-v2 .classroom-stage{background:radial-gradient(ellipse 45% 45% at 52% 48%,#111f39 0%,#080f20 62%,#030714 100%)}
+.classroom-v2 .classroom-glass{background:rgba(249,251,255,.82);border:1px solid rgba(255,255,255,.77);box-shadow:0 11px 38px rgba(0,0,0,.23),inset 0 1px 0 rgba(255,255,255,.93);-webkit-backdrop-filter:blur(26px) saturate(180%);backdrop-filter:blur(26px) saturate(180%)}
+.classroom-v2 .classroom-toolstrip{grid-template-columns:repeat(5,minmax(0,1fr));gap:3px}
+.classroom-v2 .classroom-tool{font-size:9px;min-height:63px;gap:6px}
+.classroom-v2 .classroom-tool.is-active{background:linear-gradient(145deg,#fff,#eaf4ff);border-color:#c3d9f4}
+.classroom-v2 .classroom-space-label{text-shadow:0 2px 6px #020712,0 1px 4px #000}
+.classroom-v2 .classroom-space-label small{color:#cee1f5;opacity:.9}
+.classroom-v2 .classroom-ink-layer path{filter:drop-shadow(0 1px 2px rgba(0,0,0,.18))}
+.classroom-shape-toggle{padding-top:13px}
+.classroom-shape-button{width:100%;padding:10px;display:flex;gap:9px;align-items:center;border-radius:13px;border:1px solid #dae6f5;color:#71859e;background:rgba(249,251,255,.75);text-align:left}
+.classroom-shape-button.on{border-color:#a5cdef;background:linear-gradient(115deg,#e6f3ff,#fff);color:#2b6fad}
+.classroom-shape-button>span:nth-child(2){min-width:0;flex:1;display:flex;flex-direction:column;gap:2px}
+.classroom-shape-button strong{font-size:12px;font-weight:700}
+.classroom-shape-button small{color:#92a3b7;line-height:1.4;font-size:9px}
+.classroom-switch{width:31px;height:18px;border-radius:20px;background:#cbd8e7;position:relative;flex:none}
+.classroom-switch::after{content:"";position:absolute;top:3px;left:3px;width:12px;height:12px;border-radius:100%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.13);transition:transform .18s}
+.classroom-switch.on{background:#4b98ef}
+.classroom-switch.on::after{transform:translateX(13px)}
+.classroom-view-section{padding-top:10px}
+.classroom-direction-buttons{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px;margin-top:8px}
+.classroom-direction-buttons button{min-width:0;font-size:9px;font-weight:700;color:#437098;border:1px solid #d2e2f1;background:rgba(255,255,255,.82);border-radius:8px;min-height:31px}
+.classroom-direction-buttons button:hover{background:#e7f3ff;color:#1669b6;border-color:#a8d2f2}
+.classroom-v2 .classroom-source-note{color:#73839a}
+.classroom-v2 .classroom-status{background:rgba(247,250,255,.9);font-weight:500}
+.classroom-v2 .classroom-layers,.classroom-v2 .classroom-tools{top:93px}
+.classroom-v2 .classroom-tools{scrollbar-width:thin}
+.classroom-v2 .classroom-circle-row.active{background:rgba(223,238,255,.8)}
+@media(max-width:760px){
+ .classroom-v2 .classroom-layers,.classroom-v2 .classroom-tools{top:auto}
+ .classroom-v2 .classroom-tool{min-height:55px}
+ .classroom-v2 .classroom-status{bottom:8px}
+}
+
+/* Ball-surface drawing classroom: sphere visibility and precise eraser controls */
+.classroom-hide-sphere{
+  display:flex;align-items:center;gap:10px;width:100%;padding:12px 11px;
+  margin:0 0 12px;text-align:left;border:1px solid #d0def2;
+  background:linear-gradient(125deg,rgba(242,248,255,.96),rgba(255,255,255,.78));
+  border-radius:14px;color:#37689e;transition:background .17s,border-color .17s;
+}
+.classroom-hide-sphere:hover{border-color:#77b8ec;background:#e7f4ff}
+.classroom-hide-sphere.is-hidden{
+  color:#1a548f;border-color:#7fbbe9;
+  background:linear-gradient(115deg,#d8eeff,#f5faff);
+}
+.classroom-hide-sphere>span:nth-child(2){display:flex;flex:1;min-width:0;flex-direction:column;gap:3px}
+.classroom-hide-sphere strong{font-size:12px;line-height:1.3;font-weight:700}
+.classroom-hide-sphere small{font-size:9px;line-height:1.45;color:#7892ae}
+.classroom-hide-status{color:#839ab5;flex:none;font-size:8px;letter-spacing:.06em;font-weight:700}
+.classroom-hide-sphere.is-hidden .classroom-hide-status{color:#2378c8}
+.classroom-root[data-shell="hidden"] .classroom-stage{
+  background:radial-gradient(circle at 49% 46%,#0a1930,#060b17 60%,#02040c 100%);
+}
+.classroom-root[data-shell="hidden"] .classroom-status-dot{background:#428de7}
+.classroom-v2 .classroom-tool-section .classroom-hint{max-width:100%;overflow-wrap:break-word}
+.classroom-v2 .classroom-ink-layer{pointer-events:none}
+.classroom-v2 .classroom-ink-layer circle{filter:drop-shadow(0 1px 5px rgba(0,0,0,.5))}
+@media(max-width:760px){
+  .classroom-hide-sphere{padding:10px}
+  .classroom-v2 .classroom-tools{max-height:47vh}
+}
+
+/* Pointer-accurate geometry teaching instruments */
+.classroom-v2 .classroom-ink-layer{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  pointer-events:none;
+  touch-action:none;
+  overflow:visible;
+}
+.classroom-v2 .classroom-ink-layer circle{
+  vector-effect:none;
+}
+.classroom-v2 .classroom-toolstrip{
+  display:grid;
+  grid-template-columns:repeat(7,minmax(0,1fr));
+  gap:3px;
+  padding:5px 3px;
+}
+.classroom-v2 .classroom-tool{
+  font-size:8px;
+  gap:5px;
+  min-height:59px;
+  padding:4px 0;
+}
+.classroom-v2 .classroom-tool svg{width:17px;height:17px}
+.classroom-instrument-controls{padding-top:12px}
+.classroom-instrument-options{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.classroom-instrument-options button{
+  display:flex;align-items:center;justify-content:center;gap:7px;
+  min-height:36px;border:1px solid #d7e5f5;background:rgba(255,255,255,.82);
+  border-radius:10px;font-size:10px;color:#4d7298;font-weight:600;
+}
+.classroom-instrument-options button.on{
+  background:linear-gradient(140deg,#d9ebff,#f4faff);
+  color:#166dbb;border-color:#98c1ed;
+}
+.classroom-instrument{
+  position:absolute;
+  z-index:7;
+  transform-origin:50% 50%;
+  color:#255887;
+  width:385px;
+  max-width:none;
+  user-select:none;
+  touch-action:none;
+  border:1px solid rgba(127,180,219,.65);
+  border-radius:13px;
+  background:linear-gradient(140deg,rgba(246,252,255,.83),rgba(160,218,251,.35));
+  box-shadow:0 8px 25px rgba(2,11,38,.28),inset 0 1px rgba(255,255,255,.8);
+  -webkit-backdrop-filter:blur(14px) saturate(140%);
+  backdrop-filter:blur(14px) saturate(140%);
+}
+.classroom-instrument-protractor{width:350px}
+.classroom-instrument-grip{
+  display:flex;align-items:center;gap:7px;
+  height:31px;padding:0 10px;font-size:9px;
+  letter-spacing:.1em;font-weight:700;
+  background:rgba(218,239,254,.74);border-radius:13px 13px 0 0;
+  cursor:grab;touch-action:none;
+}
+.classroom-instrument-grip:active{cursor:grabbing}
+.classroom-instrument-grip span{flex:1}
+.classroom-instrument-grip button{
+  width:25px;height:25px;
+  font-size:18px;color:#457dac;
+  border-radius:8px;
+}
+.classroom-instrument-grip button:hover{background:rgba(159,197,232,.36)}
+.classroom-ruler-face{height:63px;position:relative;overflow:hidden}
+.classroom-ruler-units{
+  position:absolute;right:11px;top:3px;
+  font-size:8px;letter-spacing:.04em;opacity:.65;
+}
+.classroom-ruler-ticks{
+  position:absolute;left:17px;top:10px;bottom:7px;
+  width:350px;border-bottom:1px solid rgba(58,110,158,.7);
+}
+.classroom-ruler-ticks>span{
+  position:absolute;bottom:0;width:1px;height:9px;background:rgba(46,102,155,.65);
+}
+.classroom-ruler-ticks>span.medium{height:17px}
+.classroom-ruler-ticks>span.major{height:27px;background:#2b649d}
+.classroom-ruler-ticks small{
+  display:block;position:absolute;bottom:28px;left:-4px;
+  font-size:9px;color:#315f90;
+}
+.classroom-protractor-face{display:block;width:100%;height:203px}
+.classroom-instrument-footer{
+  display:flex;align-items:center;justify-content:space-between;
+  font-size:9px;padding:3px 10px 7px;
+  color:#5b83aa;
+}
+.classroom-instrument-rotate{
+  cursor:ew-resize;display:flex;align-items:center;gap:6px;
+  border-radius:7px;border:1px solid #b9d5ea;
+  padding:5px 9px;background:rgba(250,254,255,.65);
+  touch-action:none;
+}
+.classroom-instrument-rotate:hover{background:#d9efff}
+.classroom-v2 .classroom-circle-label strong{font-size:15px}
+.classroom-v2 .classroom-space-label strong{font-size:16px;letter-spacing:.01em}
+@media(max-width:1050px){
+  .classroom-v2 .classroom-toolstrip{grid-template-columns:repeat(4,minmax(0,1fr));gap:5px}
+}
+@media(max-width:760px){
+  .classroom-instrument{zoom:.78}
+  .classroom-v2 .classroom-toolstrip{grid-template-columns:repeat(7,minmax(0,1fr));gap:2px}
+  .classroom-v2 .classroom-tool{font-size:8px;min-height:50px}
+  .classroom-instrument-options button{font-size:9px}
+}
+
+/* Keep touch ink aligned with the 3D stage and prevent browser gestures while drawing. */
+.classroom-v2 .classroom-stage{touch-action:none}
+.classroom-v2 .classroom-instrument{pointer-events:auto}
+
+
+/* Every great circle has its own readable Arabic teaching label. */
+.classroom-name-actions{
+  display:flex;gap:5px;flex-wrap:wrap;align-items:center;justify-content:flex-end;
+}
+.classroom-name-actions .classroom-tiny{
+  font-size:9px;padding:6px 7px;
+}
+.classroom-name-actions .classroom-tiny[aria-pressed="true"]{
+  color:#1a68ad;border-color:#95c4ed;background:#eaf5ff;
+}
+/* Labels are plain Arabic annotations close to their coloured 3D circles,
+   like the observatory reference image: no glass card, frame or number. */
+.classroom-circle-name{
+  display:block;
+  max-width:205px;
+  padding:0;
+  border:0;
+  border-radius:0;
+  background:none;
+  box-shadow:none;
+  -webkit-backdrop-filter:none;
+  backdrop-filter:none;
+  color:inherit;
+  text-align:center;
+  pointer-events:none;
+  user-select:none;
+  white-space:normal;
+  transform:translateY(-11px);
+}
+.classroom-circle-name span{
+  display:block;
+  font-family:"Amiri","Noto Naskh Arabic",serif;
+  font-size:17px;
+  line-height:1.4;
+  font-weight:700;
+  overflow-wrap:anywhere;
+  text-shadow:
+    0 2px 3px rgba(0,0,0,.98),
+    0 -1px 3px rgba(0,0,0,.97),
+    -1px 0 2px rgba(0,0,0,.95),
+    1px 0 2px rgba(0,0,0,.95);
+}
+@media(max-width:760px){
+  .classroom-circle-name{max-width:145px;transform:translateY(-7px)}
+  .classroom-circle-name span{font-size:13px;line-height:1.35}
+  .classroom-name-actions .classroom-tiny{font-size:9px}
+}
+
+/* Teaching instruments v2: transparent drawing area, only handles capture touches.
+   This allows the whiteboard pen to draw along a ruler edge, without intercepting ink. */
+.classroom-v2 .classroom-instrument{
+  pointer-events:none;
+  overflow:visible;
+  -webkit-user-select:none;
+  user-select:none;
+}
+.classroom-instrument .classroom-instrument-grip,
+.classroom-instrument .classroom-instrument-extend,
+.classroom-instrument .classroom-instrument-rotate,
+.classroom-instrument .classroom-instrument-footer button,
+.classroom-instrument .classroom-instrument-footer select,
+.classroom-instrument .classroom-protractor-arm,
+.classroom-instrument .classroom-instrument-discard{
+  pointer-events:auto;
+  touch-action:none;
+}
+.classroom-v2 .classroom-ruler-face{
+  position:relative;
+  background:linear-gradient(155deg,rgba(252,255,255,.64),rgba(148,215,253,.20));
+  border-bottom:1px solid rgba(52,111,167,.6);
+  border-top:1px solid rgba(52,111,167,.5);
+  overflow:visible;
+  pointer-events:none;
+}
+.classroom-v2 .classroom-ruler-ticks{pointer-events:none}
+.classroom-instrument-extend{
+  position:absolute;
+  z-index:15;
+  width:32px;
+  height:43px;
+  display:grid;
+  place-items:center;
+  cursor:ew-resize;
+  font-size:22px;
+  font-weight:700;
+  color:#096bb8;
+  border-radius:10px;
+  border:1px solid #8ecbf5;
+  background:linear-gradient(180deg,#f4fcff,#b0e1ff);
+  box-shadow:0 3px 12px rgba(28,91,151,.32);
+}
+.classroom-instrument-extend:hover,.classroom-instrument-extend:active{
+  color:#fff;background:#217bbd;
+}
+.classroom-instrument-footer select{
+  max-width:115px;
+  border-radius:7px;
+  padding:3px 5px;
+  background:rgba(251,255,255,.9);
+  border:1px solid rgba(77,142,197,.45);
+  color:#365f8b;
+  font-size:9px;
+}
+.classroom-ruler-sr{font-size:8px;color:#6486a8;display:block;padding:0 8px 5px}
+.classroom-v2 .classroom-instrument-protractor.advanced{
+  max-width:none;
+  height:auto;
+  background:rgba(245,252,255,.34);
+}
+.classroom-v2 .classroom-instrument-protractor.advanced .classroom-protractor-face{
+  pointer-events:none;
+  overflow:visible;
+}
+.classroom-protractor-arm{
+  position:absolute;
+  z-index:15;
+  width:23px;height:23px;
+  border:2px solid #fff;
+  border-radius:50%;
+  font-weight:800;
+  font-size:10px;
+  color:white;
+  display:grid;
+  place-items:center;
+  box-shadow:0 2px 10px rgba(0,0,0,.24);
+  cursor:grab;
+}
+.classroom-protractor-arm.a{background:#218fe4}
+.classroom-protractor-arm.b{background:#e65a80}
+.classroom-protractor-arm:active{cursor:grabbing}
+.classroom-v2 .classroom-instrument-footer.protractor-controls{
+  display:flex;
+  align-items:center;
+  gap:4px;
+  flex-wrap:wrap;
+}
+.classroom-v2 .classroom-instrument-footer.protractor-controls button{
+  color:#3573a5;
+  border:1px solid #b5d7ec;
+  background:rgba(249,254,255,.88);
+  padding:6px 9px;
+  border-radius:8px;
+  font-size:10px;
+  font-weight:600;
+}
+.classroom-instrument-discard{position:absolute;top:-14px;right:-14px;color:#3881bb;background:#fff;border-radius:50%;padding:5px;box-shadow:0 3px 10px rgba(0,0,0,.1)}
+.classroom-instrument-footer .classroom-angle-commit{
+  display:inline-flex;align-items:center;gap:4px;
+  color:#fff!important;background:#2687c8!important;
+  padding:5px 8px!important;
+  border-radius:8px;
+  font-size:10px;
+  font-weight:700;
+}
+@media(max-width:760px){
+  /* Keep CSS pixel units equal to pointer coordinates on phones and interactive screens. */
+  .classroom-instrument{zoom:1!important}
+  .classroom-v2 .classroom-instrument-ruler{transform-origin:16px 52px}
+}
+
+/* Oct 2026 · phone/tablet viewport layout and truly horizontal Arabic labels. */
+.classroom-circle-name,
+.classroom-circle-name span[lang="ar"]{
+  display:inline-flex!important;
+  flex-direction:row;
+  align-items:center;
+  justify-content:center;
+  max-width:none!important;
+  min-width:max-content;
+  width:max-content;
+  white-space:nowrap!important;
+  word-break:keep-all!important;
+  overflow-wrap:normal!important;
+  line-break:auto;
+  writing-mode:horizontal-tb!important;
+  text-orientation:mixed;
+}
+.classroom-circle-name span[lang="ar"]{
+  font-size:clamp(12px,1.12vw,17px);
+  line-height:1.65;
+  unicode-bidi:isolate;
+}
+.classroom-circle-name.is-long span[lang="ar"]{font-size:clamp(10px,.86vw,14px)}
+.classroom-circle-label strong[dir="rtl"]{
+  white-space:nowrap!important;
+  overflow-wrap:normal!important;
+  word-break:normal!important;
+  display:block;
+  max-width:100%;
+  overflow-x:auto;
+  scrollbar-width:thin;
+  text-align:right;
+  direction:rtl;
+  line-height:1.7;
+}
+.classroom-root{width:100%;height:100%;height:100dvh}
+.classroom-root .classroom-stage{width:100%;height:100%}
+.classroom-v2 .classroom-ink-layer{overflow:hidden}
+.classroom-v2 .classroom-fullscreen,
+.classroom-v2 .classroom-back{min-width:38px;min-height:38px}
+@media(max-width:1100px){
+  /* Side panels become independent bottom sheets, rather than shrinking the sphere. */
+  .classroom-root .classroom-top{
+    top:max(8px,env(safe-area-inset-top));
+    left:max(9px,env(safe-area-inset-left));
+    right:max(9px,env(safe-area-inset-right));
+    height:60px;
+    min-width:0;
+    padding:7px 10px;
+    gap:8px;
+    border-radius:18px;
+  }
+  .classroom-root .classroom-mobile-tabs{
+    display:flex;
+    flex:0 0 auto;
+    align-items:center;
+    gap:3px;
+    padding:4px;
+    border-radius:12px;
+    background:#eaf1fc;
+  }
+  .classroom-root .classroom-mobile-tabs button{
+    min-height:33px;
+    border-radius:9px;
+    padding:6px 10px;
+    font-size:12px;
+    color:#647d9b;
+    white-space:nowrap;
+  }
+  .classroom-root .classroom-mobile-tabs button.selected{
+    background:white;color:#2169b2;font-weight:700;
+    box-shadow:0 2px 8px rgba(32,69,112,.11);
+  }
+  .classroom-root .classroom-title{min-width:0;flex:1}
+  .classroom-root .classroom-kicker{font-size:8px;letter-spacing:.05em}
+  .classroom-root .classroom-heading{display:block;font-size:clamp(12px,1.7vw,17px)}
+  .classroom-v2 .classroom-layers,.classroom-v2 .classroom-tools{
+    display:none!important;
+    position:absolute;
+    z-index:11;
+    left:auto;
+    top:auto!important;
+    bottom:max(12px,env(safe-area-inset-bottom));
+    right:max(10px,env(safe-area-inset-right));
+    width:min(385px,calc(100vw - 20px));
+    max-height:min(65dvh,640px);
+    height:auto;
+    padding:15px;
+    border-radius:20px;
+    overflow:hidden;
+  }
+  .classroom-root[data-panel="layers"] .classroom-layers{display:flex!important}
+  .classroom-root[data-panel="tools"] .classroom-tools{display:flex!important;overflow-y:auto}
+  .classroom-root[data-panel="none"] .classroom-layers,
+  .classroom-root[data-panel="none"] .classroom-tools{display:none!important}
+  .classroom-root[data-panel="layers"] .classroom-status,
+  .classroom-root[data-panel="tools"] .classroom-status{display:none}
+  .classroom-v2 .classroom-toolstrip{
+    grid-template-columns:repeat(7,minmax(0,1fr));
+    gap:3px;
+  }
+  .classroom-v2 .classroom-tool{font-size:9px;min-height:52px}
+  .classroom-v2 .classroom-circle-name span[lang="ar"]{font-size:clamp(11px,1.7vw,15px)}
+}
+@media(max-width:620px){
+  .classroom-root .classroom-top{
+    height:54px;gap:5px;padding:6px;
+  }
+  .classroom-root .classroom-title{flex:1;min-width:0}
+  .classroom-root .classroom-heading{font-size:12px;letter-spacing:-.02em}
+  .classroom-root .classroom-kicker{font-size:7px;letter-spacing:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .classroom-root .classroom-mobile-tabs{gap:1px;padding:3px}
+  .classroom-root .classroom-mobile-tabs button{
+    padding:6px 7px;font-size:10px;min-height:33px;
+  }
+  .classroom-root .classroom-back,.classroom-root .classroom-fullscreen{
+    min-width:33px;width:33px;min-height:33px;height:33px;border-radius:10px;
+  }
+  .classroom-v2 .classroom-layers,.classroom-v2 .classroom-tools{
+    left:max(7px,env(safe-area-inset-left));
+    right:max(7px,env(safe-area-inset-right));
+    width:auto;
+    bottom:max(7px,env(safe-area-inset-bottom));
+    max-height:min(56dvh,560px);
+    padding:11px;
+    border-radius:17px;
+  }
+  .classroom-v2 .classroom-toolstrip{
+    grid-template-columns:repeat(7,minmax(0,1fr));
+    gap:1px;padding:3px;
+  }
+  .classroom-v2 .classroom-tool{min-width:0;min-height:49px;font-size:8px;gap:2px}
+  .classroom-v2 .classroom-tool svg{height:16px;width:16px}
+  .classroom-root .classroom-status{
+    bottom:calc(10px + env(safe-area-inset-bottom));
+    padding:8px 11px;
+    width:max-content;
+    min-width:0;
+    max-width:calc(100vw - 16px);
+    font-size:9px;
+    border-radius:14px;
+  }
+  .classroom-circle-name span[lang="ar"]{font-size:12px!important}
+  .classroom-circle-name.is-long span[lang="ar"]{font-size:10px!important}
+  .classroom-v2 .classroom-circle-list{min-height:0}
+  .classroom-v2 .classroom-instrument-options{grid-template-columns:1fr 1fr}
+}
+@media(max-width:365px){
+  .classroom-root .classroom-kicker{display:none}
+  .classroom-root .classroom-heading{font-size:11px}
+  .classroom-root .classroom-mobile-tabs button{font-size:9px;padding:6px 4px}
+}
+@media(max-height:480px) and (orientation:landscape){
+  .classroom-root .classroom-top{height:45px;top:4px}
+  .classroom-v2 .classroom-layers,.classroom-v2 .classroom-tools{
+    max-height:calc(100dvh - 55px);bottom:5px;right:5px;
+  }
+  .classroom-root .classroom-status{bottom:5px}
+}
+
+
+/* ===========================================================
+   NEO-TACTILE CLASSROOM · electric cobalt + ice-glass
+   Reference theme: silver liquid glass, smoky navy, blue glow.
+   ============================================================ */
+.classroom-root.classroom-v2{
+  --classroom-accent:#427fff;
+  --classroom-cyan:#48e1fc;
+  --classroom-dark:#061122;
+  --classroom-ink:#1c3857;
+  background:#071120;
+}
+.classroom-v2 .classroom-stage{
+  background:
+    radial-gradient(ellipse 56% 60% at 3% 7%,rgba(126,180,217,.23),transparent 65%),
+    radial-gradient(ellipse 51% 49% at 92% 84%,rgba(19,134,193,.12),transparent 72%),
+    radial-gradient(ellipse 55% 53% at 51% 43%,#14273c 0%,#0b1729 55%,#050b16 100%);
+}
+.classroom-root[data-shell="hidden"] .classroom-stage{
+  background:
+    radial-gradient(ellipse 62% 63% at -6% 0%,rgba(143,194,234,.18),transparent 66%),
+    radial-gradient(ellipse 46% 45% at 96% 89%,rgba(26,188,242,.12),transparent 74%),
+    #061020;
+}
+.classroom-v2 .classroom-glass{
+  color:#1b3654;
+  background:
+    linear-gradient(132deg,rgba(248,253,255,.82),rgba(212,226,241,.71) 36%,rgba(155,178,202,.70) 72%,rgba(139,163,188,.72) 100%);
+  border:1px solid rgba(248,253,255,.66);
+  border-radius:26px;
+  -webkit-backdrop-filter:blur(36px) saturate(180%);
+  backdrop-filter:blur(36px) saturate(180%);
+  box-shadow:
+    0 19px 54px rgba(0,4,19,.39),
+    0 3px 13px rgba(3,20,45,.22),
+    inset 0 1.5px 0 rgba(255,255,255,.92),
+    inset 0 -2px rgba(46,226,245,.12);
+}
+.classroom-v2 .classroom-top{
+  border-radius:24px;
+  box-shadow:0 10px 32px rgba(0,5,20,.29),inset 0 1.5px rgba(255,255,255,.90);
+}
+.classroom-v2 .classroom-heading{
+  color:#152c4c;
+  font-weight:760;
+  letter-spacing:-.028em;
+  text-shadow:0 1px rgba(255,255,255,.38);
+}
+.classroom-v2 .classroom-kicker,.classroom-v2 .classroom-overline{
+  color:#728cac;
+  font-weight:800;
+  letter-spacing:.135em;
+}
+.classroom-v2 .classroom-back,.classroom-v2 .classroom-fullscreen{
+  background:linear-gradient(144deg,rgba(254,255,255,.85),rgba(214,230,246,.55));
+  color:#446788;
+  border:1px solid rgba(255,255,255,.79);
+  border-radius:15px;
+  box-shadow:0 5px 12px rgba(22,54,90,.13),inset 0 1.5px rgba(255,255,255,.95);
+  transition:transform .22s,background .22s,box-shadow .22s;
+}
+.classroom-v2 .classroom-back:hover,.classroom-v2 .classroom-fullscreen:hover{
+  transform:translateY(-2px);
+  background:#f5fcff;
+  color:#3862b3;
+  box-shadow:0 5px 18px rgba(54,137,244,.22);
+}
+.classroom-v2 .classroom-panel-head h2,
+.classroom-v2 .classroom-panel-head .classroom-tool-heading{
+  color:#1b385b;
+}
+.classroom-v2 .classroom-panel-head p,.classroom-v2 .classroom-circle-label small{
+  color:#69809e;
+}
+.classroom-v2 .classroom-tiny{
+  color:#286bc4;
+  border-radius:11px;
+  border-color:rgba(132,180,230,.42);
+  background:linear-gradient(145deg,#fbfdff,#e0edfb);
+  box-shadow:0 3px 9px rgba(46,79,131,.12),inset 0 1px #fff;
+  padding:7px 10px;
+  transition:transform .2s,background .2s;
+}
+.classroom-v2 .classroom-tiny:hover{background:#f4faff;transform:translateY(-1px)}
+.classroom-v2 .classroom-circle-row{
+  border-radius:15px;
+  margin-bottom:1px;
+  transition:background .2s,box-shadow .2s,transform .2s;
+}
+.classroom-v2 .classroom-circle-row:hover{
+  background:rgba(245,251,255,.70);
+  box-shadow:0 3px 10px rgba(15,43,87,.08);
+}
+.classroom-v2 .classroom-circle-row.active{
+  background:linear-gradient(125deg,rgba(234,244,255,.89),rgba(207,225,250,.80));
+  border-color:rgba(142,187,245,.55);
+  box-shadow:0 3px 12px rgba(48,91,155,.13),inset 0 1px rgba(255,255,255,.76);
+}
+.classroom-v2 .classroom-circle-check{color:#377bed}
+.classroom-v2 .classroom-circle-label strong{color:#234363}
+.classroom-v2 .classroom-toolstrip{
+  background:linear-gradient(154deg,#344960,#172b44 60%,#12253b);
+  border:1px solid rgba(255,255,255,.23);
+  border-radius:19px;
+  box-shadow:inset 0 2px 8px rgba(0,0,0,.26),0 4px 12px rgba(23,49,86,.16);
+  padding:6px;
+  gap:4px;
+}
+.classroom-v2 .classroom-tool{
+  color:#d3e4f6;
+  border:1px solid transparent;
+  border-radius:14px;
+  font-size:9px;
+  font-weight:700;
+  min-height:64px;
+  transition:transform .17s,background .18s,color .18s,box-shadow .18s;
+}
+.classroom-v2 .classroom-tool:hover{
+  background:rgba(155,202,255,.11);
+  border-color:rgba(188,226,255,.16);
+  transform:translateY(-1px);
+}
+.classroom-v2 .classroom-tool.is-active{
+  color:#fff;
+  background:linear-gradient(148deg,#71b8ff 0%,#477dfa 49%,#3765e6);
+  border-color:rgba(174,223,255,.66);
+  box-shadow:0 4px 15px rgba(19,76,173,.42),0 0 11px rgba(45,190,242,.26),inset 0 1.5px rgba(255,255,255,.4);
+}
+.classroom-v2 .classroom-section-title{
+  color:#3a577a;
+  font-weight:750;
+  letter-spacing:.015em;
+}
+.classroom-v2 .classroom-tool-section{border-color:rgba(137,167,198,.28)}
+.classroom-v2 .classroom-shape-button,
+.classroom-v2 .classroom-hide-sphere{
+  color:#3e648b;
+  border-radius:17px;
+  border:1px solid rgba(255,255,255,.72);
+  background:linear-gradient(144deg,rgba(250,254,255,.90),rgba(211,227,246,.67));
+  box-shadow:0 5px 14px rgba(35,76,124,.12),inset 0 1.5px rgba(255,255,255,.88);
+}
+.classroom-v2 .classroom-shape-button.on,
+.classroom-v2 .classroom-hide-sphere.is-hidden{
+  color:#215caf;
+  border-color:rgba(116,180,249,.72);
+  background:linear-gradient(137deg,#f8fcff,#d2e8ff);
+  box-shadow:0 4px 16px rgba(41,108,221,.17),inset 0 1px #fff;
+}
+.classroom-v2 .classroom-shape-button small,
+.classroom-v2 .classroom-hide-sphere small{color:#6f88a5}
+.classroom-v2 .classroom-switch{
+  background:linear-gradient(135deg,#b5c3d4,#d8e3f0);
+  box-shadow:inset 0 2px 4px rgba(55,92,132,.20);
+}
+.classroom-v2 .classroom-switch.on{
+  background:linear-gradient(145deg,#72b0ff,#3e7bff);
+  box-shadow:0 0 10px rgba(52,131,253,.30),inset 0 1px rgba(255,255,255,.33);
+}
+.classroom-v2 .classroom-segmented{
+  background:rgba(57,79,112,.15);
+  border:1px solid rgba(130,170,212,.23);
+  box-shadow:inset 0 2px 5px rgba(58,83,115,.12);
+  border-radius:15px;
+}
+.classroom-v2 .classroom-segmented button{
+  font-weight:650;
+  min-height:35px;
+  border-radius:12px;
+  color:#557394;
+  transition:background .2s,box-shadow .2s;
+}
+.classroom-v2 .classroom-segmented button.selected{
+  color:#fff;
+  background:linear-gradient(130deg,#75b7ff,#407bfa);
+  border:1px solid rgba(255,255,255,.35);
+  box-shadow:0 4px 12px rgba(42,108,216,.27),inset 0 1px rgba(255,255,255,.33);
+}
+.classroom-v2 .classroom-direction-buttons button,
+.classroom-v2 .classroom-instrument-options button{
+  min-height:35px;
+  border-radius:11px;
+  color:#376792;
+  border:1px solid rgba(255,255,255,.70);
+  background:linear-gradient(147deg,rgba(254,255,255,.89),rgba(219,235,249,.65));
+  box-shadow:0 3px 8px rgba(28,65,107,.11),inset 0 1px rgba(255,255,255,.85);
+}
+.classroom-v2 .classroom-direction-buttons button:hover,
+.classroom-v2 .classroom-instrument-options button:hover{
+  color:#225db6;
+  background:#f4faff;
+  box-shadow:0 5px 13px rgba(47,109,203,.18);
+}
+.classroom-v2 .classroom-instrument-options button.on{
+  color:#fff;
+  border-color:rgba(133,191,255,.77);
+  background:linear-gradient(145deg,#6cb6ff,#4484f9);
+  box-shadow:0 5px 12px rgba(42,112,230,.22);
+}
+.classroom-v2 .classroom-swatches{gap:8px;padding:2px 0 6px}
+.classroom-v2 .classroom-swatch{
+  width:27px;height:27px;
+  box-shadow:0 2px 9px rgba(32,62,106,.20),inset 0 1px rgba(255,255,255,.32);
+  transition:transform .17s,box-shadow .17s;
+}
+.classroom-v2 .classroom-swatch.on{
+  outline:2px solid #488af9;
+  outline-offset:2px;
+  box-shadow:0 0 13px rgba(59,136,252,.29);
+}
+.classroom-v2 .classroom-swatch:hover{transform:scale(1.08)}
+.classroom-v2 .classroom-width input,
+.classroom-v2 input[type="range"]{accent-color:#4984fd;cursor:pointer}
+.classroom-v2 .classroom-toggles button,
+.classroom-v2 .classroom-seasons button{
+  color:#56718c;
+  border-radius:13px;
+  border:1px solid rgba(166,193,220,.55);
+  background:linear-gradient(140deg,rgba(250,253,255,.76),rgba(218,235,251,.55));
+  box-shadow:inset 0 1px rgba(255,255,255,.8);
+  transition:transform .17s,background .17s;
+}
+.classroom-v2 .classroom-toggles button:hover,
+.classroom-v2 .classroom-seasons button:hover{transform:translateY(-1px)}
+.classroom-v2 .classroom-toggles button.on,
+.classroom-v2 .classroom-seasons button.on{
+  border-color:#6dabfa;
+  background:linear-gradient(138deg,#70afff,#437ffa);
+  color:#fff;
+  box-shadow:0 4px 13px rgba(55,111,221,.23),inset 0 1px rgba(255,255,255,.27);
+}
+.classroom-v2 .classroom-toggles button.on small,
+.classroom-v2 .classroom-seasons button.on small{color:#e8f6ff}
+.classroom-v2 .classroom-actions button{
+  border-radius:13px;
+  min-height:38px;
+  border:1px solid rgba(255,255,255,.67);
+  background:linear-gradient(150deg,rgba(250,254,255,.89),rgba(209,225,241,.70));
+  box-shadow:0 4px 11px rgba(36,75,113,.12),inset 0 1px rgba(255,255,255,.84);
+  color:#385b83;
+  font-weight:650;
+}
+.classroom-v2 .classroom-actions button:hover:not(:disabled){
+  background:linear-gradient(130deg,#fff,#d6e9ff);
+  box-shadow:0 6px 14px rgba(42,101,180,.19);
+  transform:translateY(-1px);
+}
+.classroom-v2 .classroom-status{
+  color:#345b80;
+  border-radius:999px;
+  background:linear-gradient(131deg,rgba(247,252,255,.91),rgba(188,217,243,.83));
+  box-shadow:0 8px 21px rgba(3,20,50,.26),inset 0 1px rgba(255,255,255,.91);
+  font-weight:650;
+}
+.classroom-v2 .classroom-status-dot{
+  background:#47baff;
+  box-shadow:0 0 0 4px rgba(79,178,254,.16),0 0 12px rgba(56,181,253,.46);
+}
+.classroom-v2 .classroom-mobile-tabs{
+  background:linear-gradient(135deg,#334961,#203652);
+  border:1px solid rgba(255,255,255,.25);
+  border-radius:14px;
+  box-shadow:inset 0 2px 5px rgba(1,13,31,.25);
+}
+.classroom-v2 .classroom-mobile-tabs button{
+  border-radius:10px;
+  color:#cdddf2;
+  transition:transform .17s;
+}
+.classroom-v2 .classroom-mobile-tabs button.selected{
+  background:linear-gradient(135deg,#75b6ff,#437cf8);
+  color:white;
+  box-shadow:0 4px 11px rgba(34,100,217,.28);
+}
+.classroom-v2 .classroom-instrument{
+  border-radius:17px;
+  border:1px solid rgba(243,251,255,.8);
+  background:linear-gradient(130deg,rgba(242,250,255,.80),rgba(140,195,236,.44));
+  box-shadow:0 16px 33px rgba(3,20,48,.31),inset 0 1px rgba(255,255,255,.86),0 0 16px rgba(62,207,247,.12);
+}
+.classroom-v2 .classroom-instrument-grip{
+  background:linear-gradient(120deg,rgba(241,250,255,.92),rgba(184,219,245,.70));
+  border-radius:16px 16px 0 0;
+}
+.classroom-v2 .classroom-instrument-rotate,
+.classroom-v2 .classroom-instrument-footer select{
+  background:linear-gradient(147deg,rgba(255,255,255,.85),rgba(213,231,248,.77));
+  color:#3667a1;
+  border-color:rgba(155,202,236,.72);
+}
+.classroom-v2 button:focus-visible,
+.classroom-v2 input:focus-visible,
+.classroom-v2 a:focus-visible{
+  outline:2px solid #4b96fd;
+  outline-offset:3px;
+}
+@media(max-width:1100px){
+  .classroom-v2 .classroom-mobile-tabs button{min-height:34px}
+  .classroom-v2 .classroom-toolstrip{padding:4px}
+  .classroom-v2 .classroom-tool{min-height:50px}
+  .classroom-v2 .classroom-glass{border-radius:21px}
+}
+@media(max-width:620px){
+  .classroom-v2 .classroom-top{border-radius:17px}
+  .classroom-v2 .classroom-mobile-tabs button{min-height:32px}
+  .classroom-v2 .classroom-toolstrip{padding:3px}
+  .classroom-v2 .classroom-tool{min-height:47px}
+}
+@media(prefers-reduced-motion:reduce){
+  .classroom-v2 button,.classroom-v2 .classroom-swatch{transition:none!important;transform:none!important}
+}
+
+
+/* Current ink color remains visible and editable while teaching. */
+.classroom-v2 .classroom-color-section .classroom-swatches{
+  display:flex;
+  flex-wrap:wrap;
+  gap:9px;
+  margin-top:12px;
+}
+.classroom-v2 .classroom-current-color{
+  display:flex;
+  align-items:center;
+  gap:11px;
+  padding:10px;
+  min-width:0;
+  background:linear-gradient(138deg,rgba(249,254,255,.88),rgba(207,229,252,.68));
+  border:1px solid rgba(141,182,233,.56);
+  border-radius:16px;
+  box-shadow:0 5px 16px rgba(38,89,150,.13),inset 0 1px rgba(255,255,255,.87);
+}
+.classroom-v2 .classroom-current-color-picker{
+  position:relative;
+  width:44px;height:44px;
+  flex:none;
+  border-radius:15px;
+  overflow:hidden;
+  border:3px solid #fff;
+  cursor:pointer;
+  box-shadow:0 4px 12px rgba(13,45,98,.19),0 0 0 1px rgba(85,146,225,.29);
+}
+.classroom-v2 .classroom-current-color-preview{
+  position:absolute;inset:0;
+  border-radius:12px;
+  pointer-events:none;
+}
+.classroom-v2 .classroom-current-color-picker input[type=color]{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  opacity:0;
+  cursor:pointer;
+}
+.classroom-v2 .classroom-current-color-text{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  flex:1;
+  min-width:0;
+}
+.classroom-v2 .classroom-current-color-text strong{
+  font-size:10px;
+  color:#245074;
+  font-weight:800;
+}
+.classroom-v2 .classroom-current-color-text input{
+  width:100%;
+  max-width:115px;
+  min-height:30px;
+  border:1px solid #9fc1e8;
+  border-radius:9px;
+  background:#f7fbff;
+  color:#153d6a;
+  font-size:12px;
+  font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+  font-variant-numeric:tabular-nums;
+  text-transform:uppercase;
+  letter-spacing:.025em;
+  outline-offset:2px;
+  padding:4px 8px;
+}
+.classroom-v2 .classroom-current-color-text input:focus{
+  outline:2px solid #4b8cff;
+}
+.classroom-v2 .classroom-color-live{
+  flex:none;
+  align-self:flex-start;
+  padding:3px 5px;
+  border-radius:7px;
+  background:#dceeff;
+  color:#2468af;
+  font-size:8px;
+  font-weight:800;
+  letter-spacing:.05em;
+}
+.classroom-v2 .classroom-swatch[aria-pressed=true]{
+  outline:2px solid #3484ff;
+  outline-offset:2px;
+  box-shadow:0 0 15px rgba(60,141,255,.35);
+}
+@media(max-width:620px){
+  .classroom-v2 .classroom-current-color{padding:8px;gap:9px}
+  .classroom-v2 .classroom-current-color-picker{width:39px;height:39px}
+  .classroom-v2 .classroom-color-live{font-size:7px}
+}
+
+
+/* ===== Whiteboard reference UI · unboxed independent overlays ===== */
+/* The teaching sphere stays untouched; only drawing controls are restyled. */
+.classroom-root.classroom-v2 .classroom-floating-toolbar{
+  position:absolute!important;
+  z-index:25!important;
+  bottom:calc(10px + env(safe-area-inset-bottom));
+  left:50%;
+  transform:translateX(-50%);
+  display:flex;
+  flex-wrap:nowrap;
+  justify-content:center;
+  align-items:flex-end;
+  gap:clamp(3px,.53vw,12px);
+  width:max-content;
+  max-width:calc(100vw - 18px);
+  min-height:67px;
+  overflow-x:auto;overflow-y:hidden;
+  padding:4px 3px;
+  border:0!important;border-radius:0!important;
+  box-shadow:none!important;
+  background:transparent!important;
+  backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
+  scrollbar-width:thin;
+  overscroll-behavior-x:contain;
+  -webkit-overflow-scrolling:touch;
+  touch-action:pan-x;
+}
+.classroom-v2 .classroom-floating-toolbar .classroom-tool,
+.classroom-v2 .classroom-floating-toolbar .classroom-toolbar-icon{
+  appearance:none;
+  position:relative;
+  flex:0 0 auto;
+  display:flex!important;
+  flex-direction:column;
+  align-items:center;justify-content:center;
+  gap:5px;
+  width:clamp(44px,4.4vw,67px);
+  min-width:44px;height:60px;min-height:60px;
+  padding:5px 3px;
+  border:0!important;border-radius:13px;
+  background:transparent!important;
+  color:#f5f9ff!important;
+  box-shadow:none!important;
+  text-shadow:0 1px 3px rgba(1,9,28,.82);
+  font-size:10px;font-weight:650;
+  cursor:pointer;
+  transition:background .16s,color .16s,transform .16s;
+}
+.classroom-v2 .classroom-floating-toolbar svg{
+  width:23px;height:23px;stroke-width:2;
+  filter:drop-shadow(0 1px 3px rgba(0,0,0,.36));
+}
+.classroom-v2 .classroom-floating-toolbar .classroom-toolbar-icon small{
+  font-size:10px;line-height:1.1;font-weight:650;
+}
+.classroom-v2 .classroom-floating-toolbar .classroom-tool.is-active,
+.classroom-v2 .classroom-floating-toolbar .classroom-toolbar-icon.is-active{
+  background:#137efa!important;
+  box-shadow:0 3px 14px rgba(16,107,235,.27)!important;
+  color:white!important;text-shadow:none;
+}
+.classroom-v2 .classroom-floating-toolbar .classroom-tool:hover:not(.is-active),
+.classroom-v2 .classroom-floating-toolbar .classroom-toolbar-icon:hover:not(.is-active){
+  background:rgba(255,255,255,.09)!important;
+  transform:translateY(-2px);
+}
+.classroom-v2 .classroom-floating-toolbar button:disabled{
+  opacity:.37;cursor:not-allowed;transform:none!important;
+}
+.classroom-v2 .classroom-tools{
+  position:absolute!important;z-index:22!important;
+  top:auto!important;
+  bottom:89px!important;right:15px!important;left:auto!important;
+  width:min(336px,calc(100vw - 24px))!important;
+  max-height:min(69dvh,630px)!important;
+  height:auto!important;
+  overflow-y:auto!important;overflow-x:hidden!important;
+  display:none!important;
+  padding:16px!important;
+  border:0!important;
+  border-radius:15px!important;
+  background:rgba(11,23,40,.95)!important;
+  backdrop-filter:blur(22px)!important;
+  box-shadow:0 10px 38px rgba(0,0,0,.28)!important;
+}
+.classroom-root[data-panel="tools"] .classroom-tools{
+  display:flex!important;flex-direction:column!important;
+}
+.classroom-v2 .classroom-tools .classroom-panel-head{color:#eef7ff}
+.classroom-v2 .classroom-tools .classroom-panel-head h2,
+.classroom-v2 .classroom-tools .classroom-panel-head p,
+.classroom-v2 .classroom-tools .classroom-section-title,
+.classroom-v2 .classroom-tools .classroom-tool-section .classroom-hint{
+  color:#e5f2ff!important;
+}
+.classroom-v2 .classroom-tools .classroom-section-title{font-weight:750}
+.classroom-v2 .classroom-tools .classroom-hint{opacity:.82}
+.classroom-v2 .classroom-tools .classroom-tool-section{
+  border-color:rgba(206,231,255,.14);
+}
+.classroom-v2 .classroom-layers{
+  bottom:89px!important;
+  z-index:17!important;
+}
+.classroom-v2 .classroom-status{
+  bottom:85px!important;
+  z-index:11!important;
+  max-width:min(480px,calc(100vw - 30px));
+}
+/* Ruler and protractor are silhouettes with transparent centers, not glass cards. */
+.classroom-v2 .classroom-instrument,
+.classroom-v2 .classroom-instrument-protractor.advanced{
+  background:transparent!important;
+  border:0!important;border-radius:0!important;
+  outline:0!important;
+  box-shadow:none!important;
+  -webkit-backdrop-filter:none!important;backdrop-filter:none!important;
+}
+.classroom-v2 .classroom-instrument-grip{
+  width:max-content;
+  max-width:100%;
+  height:27px;
+  background:rgba(235,243,252,.92)!important;
+  border:0!important;border-radius:15px!important;
+  box-shadow:0 2px 7px rgba(0,0,0,.13)!important;
+  font-size:9px;color:#3e5d7d;
+}
+.classroom-v2 .classroom-ruler-face{
+  background:rgba(229,236,242,.16)!important;
+  box-shadow:none!important;
+  border-top:1px solid rgba(232,241,250,.74)!important;
+  border-bottom:1px solid rgba(232,241,250,.77)!important;
+}
+.classroom-v2 .classroom-ruler-ticks>span{background:#ebf3ff}
+.classroom-v2 .classroom-ruler-ticks>span.major{background:#f8fcff}
+.classroom-v2 .classroom-ruler-ticks small,
+.classroom-v2 .classroom-ruler-units{color:#f5faff;text-shadow:0 1px 3px #071425}
+.classroom-v2 .classroom-protractor-face{
+  filter:drop-shadow(0 2px 8px rgba(0,0,0,.25));
+}
+.classroom-v2 .classroom-instrument-footer{
+  border:0!important;
+  background:transparent!important;
+  color:#f3faff;
+  gap:6px;
+}
+.classroom-v2 .classroom-instrument-footer button,
+.classroom-v2 .classroom-instrument-footer select,
+.classroom-v2 .classroom-instrument-rotate{
+  background:rgba(231,240,251,.95)!important;
+  color:#2867a6!important;
+  border:0!important;border-radius:18px!important;
+  box-shadow:0 2px 7px rgba(0,0,0,.19)!important;
+}
+.classroom-v2 .classroom-compass-svg{
+  position:absolute!important;
+  left:0!important;top:0!important;
+  width:100%!important;height:100%!important;
+  z-index:20!important;
+  overflow:visible!important;
+  pointer-events:none!important;
+}
+.classroom-compass-svg .classroom-compass-actions{pointer-events:visiblePainted}
+@media(max-width:1100px){
+  .classroom-v2 .classroom-floating-toolbar{
+    bottom:calc(4px + env(safe-area-inset-bottom));
+    max-width:calc(100vw - 8px);
+    justify-content:flex-start;gap:3px;
+  }
+  .classroom-v2 .classroom-floating-toolbar .classroom-tool,
+  .classroom-v2 .classroom-floating-toolbar .classroom-toolbar-icon{
+    width:49px;min-width:49px;height:55px;min-height:55px;
+    font-size:9px;
+  }
+  .classroom-v2 .classroom-floating-toolbar .classroom-toolbar-icon small{font-size:9px}
+  .classroom-v2 .classroom-floating-toolbar svg{width:21px;height:21px}
+  .classroom-v2 .classroom-layers{
+    top:auto!important;bottom:80px!important;
+    max-height:min(62dvh,630px)!important;
+  }
+  .classroom-v2 .classroom-tools{
+    bottom:76px!important;
+    max-height:58dvh!important;
+    left:auto!important;right:8px!important;
+    width:min(330px,calc(100vw - 16px))!important;
+  }
+  .classroom-root[data-panel="none"] .classroom-layers,
+  .classroom-root[data-panel="tools"] .classroom-layers{display:none!important}
+  .classroom-root[data-panel="layers"] .classroom-layers{display:flex!important}
+  .classroom-v2 .classroom-status{bottom:75px!important}
+}
+@media(max-width:620px){
+  .classroom-v2 .classroom-floating-toolbar{
+    left:4px;right:4px;transform:none;
+    max-width:none;width:calc(100% - 8px);
+  }
+  .classroom-v2 .classroom-tools{
+    bottom:69px!important;
+    width:calc(100vw - 14px)!important;
+    max-height:55dvh!important;
+  }
+  .classroom-v2 .classroom-layers{
+    bottom:72px!important;
+    max-height:53dvh!important;
+  }
+  .classroom-v2 .classroom-status{bottom:72px!important}
+  .classroom-v2 .classroom-floating-toolbar .classroom-tool,
+  .classroom-v2 .classroom-floating-toolbar .classroom-toolbar-icon{
+    min-width:46px;width:46px;min-height:52px;height:52px;
+    font-size:8px;
+  }
+  .classroom-v2 .classroom-floating-toolbar .classroom-toolbar-icon small{font-size:8px}
+}
+
+/* Dual-scale transparent instrument: relative inch/cm ratio is 2.54. */
+.classroom-v2 .classroom-ruler-inch-ticks{
+  position:absolute;left:17px;right:12px;top:2px;
+  height:24px;pointer-events:none;
+}
+.classroom-v2 .classroom-ruler-inch-ticks span{
+  position:absolute;top:0;width:1px;height:8px;background:#eaf5ff;
+}
+.classroom-v2 .classroom-ruler-inch-ticks span.medium{height:13px}
+.classroom-v2 .classroom-ruler-inch-ticks span.major{height:17px}
+.classroom-v2 .classroom-ruler-inch-ticks small{
+  position:absolute;top:17px;left:-3px;color:#f5fcff;font-size:9px;
+  text-shadow:0 1px 2px #0e2945;
+}
+.classroom-v2 .classroom-ruler-ticks{bottom:3px!important;top:auto!important;height:28px!important}
+.classroom-v2 .classroom-ruler-face{height:72px!important;min-height:72px}
+
+
+/* Single Neo-Tactile drawing dock: use the former guidance-pill appearance
+   for the toolbar itself; keep guidance accessible without displaying another card. */
+.classroom-root.classroom-v2 .classroom-floating-toolbar.classroom-glass{
+  position:absolute!important;
+  left:50%!important;
+  right:auto!important;
+  bottom:calc(12px + env(safe-area-inset-bottom))!important;
+  transform:translateX(-50%)!important;
+  z-index:28!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:flex-start!important;
+  flex-wrap:nowrap!important;
+  gap:3px!important;
+  width:max-content!important;
+  max-width:calc(100vw - 22px)!important;
+  min-height:0!important;
+  height:76px!important;
+  box-sizing:border-box!important;
+  padding:7px 10px!important;
+  border:1px solid rgba(249,253,255,.82)!important;
+  border-radius:23px!important;
+  background:linear-gradient(122deg,rgba(248,252,255,.96),rgba(206,221,239,.91) 53%,rgba(165,194,226,.88))!important;
+  box-shadow:0 14px 37px rgba(0,8,27,.36),0 2px 10px rgba(13,51,96,.14),inset 0 1.5px rgba(255,255,255,.95)!important;
+  -webkit-backdrop-filter:blur(24px) saturate(160%)!important;
+  backdrop-filter:blur(24px) saturate(160%)!important;
+  overflow-x:auto!important;
+  overflow-y:hidden!important;
+  scrollbar-width:thin;
+  scrollbar-color:rgba(60,101,151,.36) transparent;
+}
+.classroom-root.classroom-v2 .classroom-floating-toolbar.classroom-glass::before{
+  opacity:.28;
+  border-radius:inherit;
+  pointer-events:none;
+}
+.classroom-root.classroom-v2 .classroom-floating-toolbar .classroom-tool,
+.classroom-root.classroom-v2 .classroom-floating-toolbar .classroom-toolbar-icon{
+  width:54px!important;
+  min-width:50px!important;
+  height:59px!important;
+  min-height:59px!important;
+  flex:0 0 auto!important;
+  padding:5px 3px!important;
+  background:transparent!important;
+  color:#294966!important;
+  text-shadow:none!important;
+  border-radius:15px!important;
+  box-shadow:none!important;
+  font-size:10px!important;
+  font-weight:750!important;
+}
+.classroom-root.classroom-v2 .classroom-floating-toolbar .classroom-toolbar-icon small{
+  color:inherit;
+  line-height:1.25!important;
+  font-size:10px!important;
+  font-weight:750!important;
+}
+.classroom-root.classroom-v2 .classroom-floating-toolbar svg{
+  filter:none!important;
+  stroke-width:2.05;
+}
+.classroom-root.classroom-v2 .classroom-floating-toolbar .classroom-tool.is-active,
+.classroom-root.classroom-v2 .classroom-floating-toolbar .classroom-toolbar-icon.is-active{
+  color:#fff!important;
+  background:linear-gradient(145deg,#65b6ff,#2886ff 50%,#1666e8)!important;
+  box-shadow:0 5px 14px rgba(29,110,225,.30),inset 0 1px rgba(255,255,255,.38)!important;
+}
+.classroom-root.classroom-v2 .classroom-floating-toolbar .classroom-tool:hover:not(.is-active),
+.classroom-root.classroom-v2 .classroom-floating-toolbar .classroom-toolbar-icon:hover:not(.is-active){
+  color:#1b63ae!important;
+  background:rgba(255,255,255,.46)!important;
+  box-shadow:inset 0 0 0 1px rgba(92,151,223,.16)!important;
+  transform:translateY(-1px);
+}
+.classroom-root.classroom-v2 .classroom-floating-toolbar button:disabled{
+  opacity:.37!important;
+}
+.classroom-root.classroom-v2 .classroom-floating-toolbar .classroom-toolbar-cancel{
+  color:#a33a52!important;
+}
+.classroom-root.classroom-v2 .classroom-floating-toolbar button:focus-visible{
+  outline:2px solid #247cec;
+  outline-offset:0;
+}
+.classroom-v2 .classroom-screenreader-status{
+  position:absolute!important;
+  width:1px!important;
+  height:1px!important;
+  padding:0!important;
+  margin:-1px!important;
+  overflow:hidden!important;
+  clip:rect(0,0,0,0)!important;
+  white-space:nowrap!important;
+  border:0!important;
+}
+.classroom-v2 .classroom-layers{
+  bottom:calc(105px + env(safe-area-inset-bottom))!important;
+}
+.classroom-v2 .classroom-tools{
+  bottom:calc(105px + env(safe-area-inset-bottom))!important;
+}
+@media(max-width:1100px){
+  .classroom-root.classroom-v2 .classroom-floating-toolbar.classroom-glass{
+    bottom:calc(7px + env(safe-area-inset-bottom))!important;
+    height:70px!important;
+    padding:5px 7px!important;
+    border-radius:19px!important;
+    max-width:calc(100vw - 14px)!important;
+  }
+  .classroom-root.classroom-v2 .classroom-floating-toolbar .classroom-tool,
+  .classroom-root.classroom-v2 .classroom-floating-toolbar .classroom-toolbar-icon{
+    min-width:48px!important;width:48px!important;
+    min-height:54px!important;height:54px!important;
+    font-size:9px!important;
+  }
+  .classroom-root.classroom-v2 .classroom-floating-toolbar .classroom-toolbar-icon small{
+    font-size:9px!important;
+  }
+  .classroom-v2 .classroom-layers,.classroom-v2 .classroom-tools{
+    bottom:calc(88px + env(safe-area-inset-bottom))!important;
+  }
+}
+@media(max-width:620px){
+  .classroom-root.classroom-v2 .classroom-floating-toolbar.classroom-glass{
+    left:7px!important;
+    right:7px!important;
+    transform:none!important;
+    width:calc(100% - 14px)!important;
+    max-width:none!important;
+    height:66px!important;
+    justify-content:flex-start!important;
+    gap:2px!important;
+  }
+  .classroom-root.classroom-v2 .classroom-floating-toolbar .classroom-tool,
+  .classroom-root.classroom-v2 .classroom-floating-toolbar .classroom-toolbar-icon{
+    min-width:47px!important;width:47px!important;
+    min-height:52px!important;height:52px!important;
+  }
+  .classroom-v2 .classroom-layers,.classroom-v2 .classroom-tools{
+    bottom:calc(82px + env(safe-area-inset-bottom))!important;
+  }
+}
