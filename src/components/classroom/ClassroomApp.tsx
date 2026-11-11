@@ -15,6 +15,7 @@ import { ClassroomTextMesh, type TextAnnotation } from "./ClassroomTextMesh";
 import { cleanLineName, isValidStoredLineName, lineLabelPoint2D, lineLabelPoint3D } from "./lineLabels";
 import { newProjectId, readProjects, writeProjects, type SavedProject } from "./projectStorage";
 import { centerAxisPaths, interpolate2, interpolate3, nearestProjectedSegment, perspectiveCorrectRatio } from "./joinGeometry";
+import { pickDrawnLine, pressHasMoved, type DrawnLineCandidate, type LinePick } from "./lineInteraction";
 import "./Classroom.css";
 import "./ClassroomEnhancements.css";
 
@@ -60,7 +61,10 @@ function validProjectData(value:unknown):value is ProjectData {
       typeof x.inside==="boolean"&&coord(x.position,3));
 }
 type Gesture = {pointer:number;kind:"screen"|"erase"|"free-line"|"edit"|"sphere"|"free-multi"|"hollow-pen"|"join";x:number;y:number;startX:number;startY:number;dragged:boolean;guide:boolean};
-type Edit = {id:string;endpoint:0|1};
+type Edit = {id:string;endpoint:0|1;kind:"mark"|"stroke"};
+type LineMenu = {selection:LinePick;at:XY};
+type Hold = {pointer:number;start:XY;selection:LinePick;timer:number|null;
+  fired:boolean;cancelled:boolean;dragged:boolean};
 type CameraCmd = {number:number;dir:Vec};
 const SEASONS = [
   {longitude:0,ar:"نُقْطَةُ الِاعْتِدَالِ الرَّبِيعِيِّ",en:"Vernal Equinox · East"},
@@ -344,7 +348,7 @@ function MarkLine({mark,view,showSphere,edit,onBeginEdit}:{mark:Mark;view:View;s
       <span className="classroom-measure-label">{mark.measure}</span>
     </Html>}
     {mark.anchorA&&mark.anchorB&&([mark.anchorA,mark.anchorB] as const).map((anchor,index)=>{
-      const active=edit?.id===mark.id&&edit.endpoint===index;
+      const active=edit?.kind==="mark"&&edit.id===mark.id&&edit.endpoint===index;
       const edge=mark.points[index===0?0:mark.points.length-1]!;
       const position=mark.surface?v(anchor).multiplyScalar(mark.inside?0.982:1.027):new THREE.Vector3(...edge);
       return <mesh key={index} position={position}
@@ -459,6 +463,14 @@ export function ClassroomApp(){
   const stageRef=useRef<HTMLElement|null>(null);
   const [stageSize,setStageSize]=useState<XY>([1000,700]);
   const [edit,setEdit]=useState<Edit|null>(null);
+  const [lineMenu,setLineMenu]=useState<LineMenu|null>(null);
+  const holdRef=useRef<Hold|null>(null);
+  const cancelHold=()=>{
+    const hold=holdRef.current;
+    if(hold?.timer!==null&&hold?.timer!==undefined)window.clearTimeout(hold.timer);
+    holdRef.current=null;
+  };
+  useEffect(()=>()=>cancelHold(),[]);
   const [marks,setMarks]=useState<Mark[]>([]);
   const [texts,setTexts]=useState<TextAnnotation[]>([]);
   const [nameTask,setNameTask]=useState<NameTask|null>(null);
@@ -550,6 +562,7 @@ export function ClassroomApp(){
   };
 
   const chooseTool=(next:Tool)=>{
+    cancelHold();setLineMenu(null);
     setTool(next);setPending(null);setPendingScreen(null);setPendingVertices([]);setPendingScreenVertices([]);setDrawing(null);setHollowPenDraft([]);hollowDraftRef.current=[];setEdit(null);setJoinFrom(null);
     setInfo(next==="orbit"?"Drag vertically N–S or horizontally E–W; scroll/pinch to zoom.":
       next==="eraser"?"Click any teacher-drawn line to remove it; drag across a portion to cut it.":
@@ -564,22 +577,29 @@ export function ClassroomApp(){
   };
   const moveEndpoint=useCallback((which:Edit,point:Vec)=>{
     setMarks(old=>old.map(mark=>{
-      if(mark.id!==which.id||!mark.anchorA||!mark.anchorB)return mark;
-      const a=which.endpoint===0?point:mark.anchorA;
-      const b=which.endpoint===1?point:mark.anchorB;
-      if(angle(a,b)<0.003)return mark;
-      const pts=mark.surface?shapePath(a,b,mark.inside):
-        mark.inside?segmentInSphere(a,b):straightPath(a,b,"outside");
-      return {...mark,anchorA:a,anchorB:b,points:pts,measure:mark.kind==="ruler"?deg(a,b)+"°":undefined};
+      if(which.kind!=="mark"||mark.id!==which.id)return mark;
+      if(mark.anchorA&&mark.anchorB){
+        const a=which.endpoint===0?point:mark.anchorA;
+        const b=which.endpoint===1?point:mark.anchorB;
+        if(angle(a,b)<0.003)return mark;
+        const pts=mark.surface?shapePath(a,b,mark.inside):
+          mark.inside?segmentInSphere(a,b):straightPath(a,b,"outside");
+        return {...mark,anchorA:a,anchorB:b,points:pts,measure:mark.kind==="ruler"?deg(a,b)+"°":undefined};
+      }
+      // Center axes, Join chords and freehand paths have no anchorA/B:
+      // allow editing their real first and last vertices as well.
+      const points=[...mark.points];
+      points[which.endpoint===0?0:points.length-1]=point;
+      return {...mark,points};
     }));
   },[]);
   const onBeginEdit=useCallback((id:string,endpoint:0|1)=>{
     setPending(null);setPendingScreen(null);
-    setEdit({id,endpoint});
-    setInfo("Edit endpoint: drag it onto the sphere or click a new destination. Use Undo to reverse.");
+    setEdit({id,endpoint,kind:"mark"});
+    setInfo("Edit 3D endpoint: tap its new destination. Undo can restore the original position.");
   },[]);
   const onPoint=useCallback((point:Vec)=>{
-    if(edit){snapshot();moveEndpoint(edit,point);setEdit(null);setInfo("Endpoint moved. Undo restores the previous position.");return;}
+    if(edit&&edit.kind==="mark"){snapshot();moveEndpoint(edit,point);setEdit(null);setInfo("Endpoint moved. Undo restores the previous position.");return;}
     if(tool==="orbit"||tool==="eraser"||tool==="join")return;
     if(tool==="text3d"){
       const value=textInput.trim().slice(0,100);
