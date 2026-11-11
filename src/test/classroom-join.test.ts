@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { centerAxisPaths, nearestProjectedSegment, interpolate2, interpolate3 } from "../components/classroom/joinGeometry";
+import { centerAxisPaths, nearestProjectedSegment, interpolate2, interpolate3, perspectiveCorrectRatio } from "../components/classroom/joinGeometry";
 
 describe("Classroom Join anywhere", () => {
   it("snaps to the interior of a straight line, not only endpoints", () => {
@@ -17,6 +17,11 @@ describe("Classroom Join anywhere", () => {
   it("ignores hidden segments and clicks too far from any line", () => {
     expect(nearestProjectedSegment([null, [100, 0], [150, 0]], [50, 0], 16)).toBeNull();
     expect(nearestProjectedSegment([[0, 0], [100, 0]], [50, 99], 18)).toBeNull();
+  });
+  it("perspective-corrects projected fractions into accurate 3D positions", () => {
+    expect(perspectiveCorrectRatio(0.5, 2, 4)).toBeCloseTo(1 / 3);
+    expect(perspectiveCorrectRatio(0.5, 4, 2)).toBeCloseTo(2 / 3);
+    expect(perspectiveCorrectRatio(0.5, 3, 3)).toBeCloseTo(0.5);
   });
   it("draws full inside horizontal and vertical 3D diameters crossing the exact center", () => {
     const [h, v] = centerAxisPaths();
