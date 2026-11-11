@@ -21,7 +21,7 @@ type XY = [number,number];
 type Tool = "orbit" | "pen" | "line" | "ruler" | "eraser" | "triangle" | "protractor" | "join" | "text3d";
 type Place = "inside" | "outside";
 type View = "outside" | "inside";
-type Mark = {id:string;points:Vec[];color:string;width:number;surface:boolean;inside:boolean;measure?:string;anchorA?:Vec;anchorB?:Vec;kind?:"pen"|"line"|"ruler"};
+type Mark = {id:string;points:Vec[];color:string;width:number;surface:boolean;inside:boolean;measure?:string|undefined;anchorA?:Vec|undefined;anchorB?:Vec|undefined;kind?:"pen"|"line"|"ruler"};
 type Stroke = {id:string;points:XY[];color:string;width:number;measure?:{x:number;y:number;label:string}};
 type Snapshot = {marks:Mark[];strokes:Stroke[];texts:TextAnnotation[]};
 type JoinEndpoint = {id:string;type:"mark";position:Vec} | {id:string;type:"stroke";position:XY};
@@ -128,7 +128,7 @@ function markHit(mark:Mark,p:XY,camera:THREE.Camera,w:number,h:number,view:View,
 function inkHit(stroke:Stroke,p:XY,w:number,h:number) {
   let best=Infinity;
   for(let i=1;i<stroke.points.length;i++){
-    const a=stroke.points[i-1],b=stroke.points[i];
+    const a=stroke.points[i-1]!,b=stroke.points[i]!;
     best=Math.min(best,screenDistance(p,[a[0]*w,a[1]*h],[b[0]*w,b[1]*h]));
   }
   return best;
