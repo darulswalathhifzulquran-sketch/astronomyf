@@ -1100,6 +1100,67 @@ export function ClassroomApp(){
     <aside className="classroom-tools classroom-glass" aria-label="Whiteboard drawing tools">
       <div className="classroom-panel-head"><div><span className="classroom-overline">YOUR WORKSPACE</span>
         <h2 className="classroom-tool-heading">Teaching tools</h2><p>Sketch · Measure · Explain</p></div><PenLine size={19}/></div>
+      <div className="classroom-tool-section classroom-project-section">
+        <div className="classroom-section-title"><Save size={15}/> Classroom projects</div>
+        <label className="classroom-project-label">Project name
+          <input maxLength={80} value={projectName} onChange={e=>setProjectName(e.target.value)}
+            placeholder="Project name" aria-label="Current classroom project name"/>
+        </label>
+        <div className="classroom-project-actions">
+          <button onClick={newProject}><FilePlus2 size={15}/> New</button>
+          <button onClick={()=>saveProject()}><Save size={15}/> Save</button>
+          <button onClick={()=>saveProject(true)}><FilePlus2 size={15}/> Save as</button>
+        </div>
+        <label className="classroom-project-label">Saved in this browser
+          <select value={selectedProjectId} onChange={e=>setSelectedProjectId(e.target.value)}
+            aria-label="Select saved project">
+            <option value="">Choose a saved project…</option>
+            {savedProjects.map(p=><option key={p.id} value={p.id}>{p.name} · {new Date(p.updatedAt).toLocaleDateString()}</option>)}
+          </select>
+        </label>
+        <div className="classroom-project-actions">
+          <button disabled={!selectedProjectId} onClick={openProject}><FolderOpen size={15}/> Open</button>
+          <button disabled={!selectedProjectId} onClick={renameProject}><Pencil size={15}/> Rename</button>
+          <button disabled={!selectedProjectId} onClick={deleteProject}><Trash2 size={15}/> Delete</button>
+          <button onClick={exportProject}><FileDown size={15}/> Export</button>
+          <button onClick={()=>importRef.current?.click()}><FileUp size={15}/> Import</button>
+          <input ref={importRef} className="classroom-import-file" type="file"
+            accept="application/json,.json" aria-label="Import saved classroom project"
+            onChange={async e=>{const file=e.target.files?.[0];e.target.value="";if(file)await importProject(file);}}/>
+        </div>
+        <p className="classroom-hint">Projects stay in this browser until deleted or browser data is cleared.
+          Export JSON to back up or move a project to another device.</p>
+      </div>
+      <div className="classroom-tool-section classroom-text-section">
+        <div className="classroom-section-title"><Type size={15}/> 3D Text</div>
+        <label className="classroom-project-label">Label (Arabic / English)
+          <input type="text" maxLength={100} value={textInput}
+            onChange={e=>setTextInput(e.target.value)} placeholder="Enter 3D text"/>
+        </label>
+        <label className="classroom-project-label">Text height · {textSize.toFixed(2)}
+          <input type="range" min="0.08" max="0.45" step="0.01" value={textSize}
+            onChange={e=>setTextSize(Number(e.target.value))}/>
+        </label>
+        <button className={"classroom-feature-action"+(tool==="text3d"?" on":"")}
+          type="button" onClick={()=>chooseTool(tool==="text3d"?"orbit":"text3d")}>
+          <Type size={16}/> {tool==="text3d"?"Placing text — click sphere":"Place 3D Text"}
+        </button>
+        <p className="classroom-hint">Text is placed in 3D world space on the visible sphere,
+          and follows the scene as you rotate it. Change ink color before placing.</p>
+        {texts.map(label=><div key={label.id} className="classroom-text-entry">
+          <input maxLength={100} aria-label="Edit existing 3D text" value={label.value}
+            onChange={e=>setTexts(old=>old.map(x=>x.id===label.id?{...x,value:e.target.value}:x))}/>
+          <button type="button" title="Delete 3D text" aria-label="Delete 3D text"
+            onClick={()=>{snapshot();setTexts(old=>old.filter(x=>x.id!==label.id));}}><Trash2 size={15}/></button>
+        </div>)}
+      </div>
+      <div className="classroom-tool-section classroom-join-section">
+        <div className="classroom-section-title"><Link2 size={15}/> Join line to line</div>
+        <button className={"classroom-feature-action"+(tool==="join"?" on":"")} type="button"
+          onClick={()=>chooseTool(tool==="join"?"orbit":"join")}><Link2 size={16}/> Join endpoints</button>
+        <p className="classroom-hint">Click an endpoint of any existing line, then a second endpoint.
+          3D lines join in free space without forcing the join onto the sphere; flat ink lines join on the board.</p>
+      </div>
       <div className="classroom-tool-section classroom-instrument-controls">
         <div className="classroom-section-title"><Ruler size={15}/> Teaching instruments</div>
         <div className="classroom-instrument-options">
