@@ -1253,7 +1253,7 @@ export function ClassroomApp(){
   const clear=()=>{
     if(!marks.length&&!strokes.length&&!texts.length&&!pending&&!pendingScreen&&!pendingVertices.length&&!pendingScreenVertices.length)return;
     if(!window.confirm("Clear all classroom drawings?"))return;
-    snapshot();setNameTask(null);setMarks([]);setStrokes([]);setTexts([]);setJoinFrom(null);setPending(null);setPendingScreen(null);setPendingVertices([]);setPendingScreenVertices([]);setDrawing(null);setEdit(null);
+    snapshot();cancelHold();setLineMenu(null);setNameTask(null);setMarks([]);setStrokes([]);setTexts([]);setJoinFrom(null);setPending(null);setPendingScreen(null);setPendingVertices([]);setPendingScreenVertices([]);setDrawing(null);setEdit(null);
     setInfo("Teacher drawings cleared; the original astronomical circles remain.");
   };
 
@@ -1264,6 +1264,7 @@ export function ClassroomApp(){
     setSeasons(data.seasons);setShowSphere(data.showSphere);setShowNames(data.showNames);
     setView(data.view);setShape(data.shape);setPlacement(data.placement);
     setColor(data.color);setHexDraft(data.color);setWidth(data.width);
+    cancelHold();setLineMenu(null);setEdit(null);
     setNameTask(null);setNameDraft("");setSelectedLineKey("");
     setMarks(data.marks);setStrokes(data.strokes);setTexts(data.texts);
     setHistory([]);setFuture([]);chooseTool("orbit");
@@ -1336,6 +1337,7 @@ export function ClassroomApp(){
   };
   const newProject=()=>{
     if(!window.confirm("Start a new classroom? Export or Save any unsaved changes first."))return;
+    cancelHold();setLineMenu(null);setEdit(null);
     setNameTask(null);setNameDraft("");setSelectedLineKey("");
     setMarks([]);setStrokes([]);setTexts([]);setHistory([]);setFuture([]);
     setVisible(DEFAULT_VISIBLE);setSeasons(SEASONS.map(x=>x.longitude));
@@ -1526,6 +1528,9 @@ export function ClassroomApp(){
         <p className="classroom-hint">After finishing any drawn line, you can attach a name or
           finish without a name. Names follow 3D lines when the globe rotates and are
           saved with your project. You can also rename older lines here.</p>
+        <p className="classroom-hint">Quick actions: choose Select, then touch and hold a
+          line for Delete / Edit Label. On a PC, double-click the line.
+          Hold an endpoint on touch to drag it or tap a new position.</p>
         <label className="classroom-project-label">Choose a drawn line
           <select aria-label="Select line to add, edit or remove its name" value={selectedLineKey}
             onChange={e=>setSelectedLineKey(e.target.value)}>
@@ -1675,9 +1680,41 @@ export function ClassroomApp(){
       <div className="classroom-actions">
         <button onClick={undo} disabled={!edit&&!pending&&!pendingScreen&&!pendingVertices.length&&!pendingScreenVertices.length&&!history.length}><Undo2 size={15}/> Undo</button>
         <button onClick={clear} disabled={!pending&&!pendingScreen&&!pendingVertices.length&&!pendingScreenVertices.length&&marks.length===0&&strokes.length===0&&texts.length===0}><Eraser size={15}/> Clear</button>
-        <button onClick={()=>{setNameTask(null);setSelectedLineKey("");setNameDraft("");setMarks([]);setStrokes([]);setTexts([]);setJoinFrom(null);setHistory([]);setFuture([]);setCompassVisible(false);setPending(null);setPendingScreen(null);setPendingVertices([]);setPendingScreenVertices([]);setEdit(null);setShowSphere(true);setShowNames(true);setRulerVisible(false);setProtractorVisible(false);setVisible(DEFAULT_VISIBLE);setSeasons(SEASONS.map(s=>s.longitude));setZenith(true);setNadir(true);setDirections(true);setView("outside");setCmd(old=>({number:old.number+1,dir:[0,0,1]}));setShape(true);chooseTool("orbit");}}><RotateCcw size={15}/> Reset</button>
+        <button onClick={()=>{cancelHold();setLineMenu(null);setNameTask(null);setSelectedLineKey("");setNameDraft("");setMarks([]);setStrokes([]);setTexts([]);setJoinFrom(null);setHistory([]);setFuture([]);setCompassVisible(false);setPending(null);setPendingScreen(null);setPendingVertices([]);setPendingScreenVertices([]);setEdit(null);setShowSphere(true);setShowNames(true);setRulerVisible(false);setProtractorVisible(false);setVisible(DEFAULT_VISIBLE);setSeasons(SEASONS.map(s=>s.longitude));setZenith(true);setNadir(true);setDirections(true);setView("outside");setCmd(old=>({number:old.number+1,dir:[0,0,1]}));setShape(true);chooseTool("orbit");}}><RotateCcw size={15}/> Reset</button>
       </div>
     </aside>
+    {edit&&!nameTask&&<div className="classroom-endpoint-banner" role="status">
+      <span><strong>Editing line endpoint</strong>
+        {" · Drag the selected point or tap a new position"}
+      </span>
+      <button type="button" onClick={()=>{setEdit(null);setInfo("Endpoint editing canceled.");}}>
+        <X size={15}/> Cancel
+      </button>
+    </div>}
+    {lineMenu&&contextualLine&&<div className="classroom-line-menu-backdrop"
+      onClick={()=>setLineMenu(null)}>
+      <div className="classroom-line-menu" role="dialog" aria-modal="true"
+        aria-labelledby="classroom-line-action-title"
+        onClick={e=>e.stopPropagation()}
+        onKeyDown={e=>{if(e.key==="Escape"){e.preventDefault();setLineMenu(null);}}}>
+        <span className="classroom-line-menu-kicker">SELECTED DRAWING</span>
+        <h2 id="classroom-line-action-title">{contextualLine.name||"Unnamed line"}</h2>
+        <p>{lineMenu.selection.kind==="mark"?"3D line":"Whiteboard line"}
+          {" · Choose an action"}</p>
+        <button type="button" onClick={contextualEditLabel}>
+          <Pencil size={18}/> {contextualLine.name?"Edit label":"Add label"}
+        </button>
+        {lineMenu.selection.endpoint!==null&&<button type="button" onClick={()=>{
+          const selection=lineMenu.selection;
+          setLineMenu(null);beginEndpointEdit(selection);
+        }}><MousePointer2 size={18}/> Edit this endpoint</button>}
+        <button type="button" className="classroom-line-menu-delete"
+          onClick={contextualDelete}><Trash2 size={18}/> Delete line</button>
+        <button type="button" className="classroom-line-menu-cancel"
+          onClick={()=>setLineMenu(null)}><X size={18}/> Cancel</button>
+        <small>Deleting is reversible with Undo; a line's label is linked to its drawing.</small>
+      </div>
+    </div>}
     {nameTask&&<div className="classroom-name-backdrop">
       <form className="classroom-name-dialog" role="dialog" aria-modal="true"
         aria-labelledby="classroom-name-title"
