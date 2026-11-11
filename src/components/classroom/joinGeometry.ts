@@ -33,6 +33,14 @@ export function interpolate2(a: XY, b: XY, ratio: number): XY {
 export function interpolate3(a: Vec, b: Vec, ratio: number): Vec {
   return [a[0] + (b[0] - a[0]) * ratio, a[1] + (b[1] - a[1]) * ratio, a[2] + (b[2] - a[2]) * ratio];
 }
+/** Projected straight segments are perspective-distorted. Convert an
+ * apparent screen fraction to the actual 3D segment fraction. */
+export function perspectiveCorrectRatio(screenRatio: number, depthA: number, depthB: number): number {
+  if(depthA<=0||depthB<=0)return screenRatio;
+  const numerator=screenRatio*depthA;
+  const denominator=(1-screenRatio)*depthB+numerator;
+  return denominator>1e-12?numerator/denominator:screenRatio;
+}
 /** Two full diameters of the hollow celestial sphere.
  * Horizontal = east/west (+X), vertical = zenith/nadir (+Y).
  * Both pass precisely through the 3D origin and stay inside radius 1.
