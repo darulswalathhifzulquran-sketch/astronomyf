@@ -632,6 +632,14 @@ export function ClassroomApp(){
       setInfo(tool==="triangle"?"Straight triangle completed.":"Measured angle: "+planarAngle(b,a,c).toFixed(1)+"°");
     }
   };
+  const teachingGeometry=useMemo(()=>{
+    const sky=computeSky(SKY_DATE,0,75.8);
+    return GEOMETRY.map(layer=>{
+      const geometry=buildLayer(layer.id,sky);
+      const lines=geometry.lines.length?geometry.lines:layer.num===9?[greatCircle(planeNormal(sky.K,V(0,1,0)))]:[];
+      return {layer,lines};
+    });
+  },[]);
   const joinAt=(pixel:XY)=>{
     const camera=cameraRef.current;
     if(!camera){setInfo("The 3D scene is still initializing.");return;}
@@ -640,7 +648,7 @@ export function ClassroomApp(){
     for(const mark of marks){
       if(mark.points.length<2)continue;
       for(const point of [mark.points[0]!,mark.points[mark.points.length-1]!] as Vec[]){
-        if(!visiblePoint(point,camera,view,showSphere))continue;
+        if(mark.surface&&!visiblePoint(point,camera,view,showSphere))continue;
         const screen=projectPoint(point,camera,w,h);
         if(!screen)continue;
         const distance=dist2(screen,pixel);
@@ -654,11 +662,31 @@ export function ClassroomApp(){
         if(distance<nearest){nearest=distance;best={id:stroke.id,type:"stroke",position:point};}
       }
     }
-    if(!best){setInfo("Join: click within 26 pixels of a line endpoint.");return;}
-    if(!joinFrom){setJoinFrom(best);setInfo("First endpoint selected. Select the endpoint of another line.");return;}
+    // Astronomical circles have no endpoints: select any visible point on a circle/arc.
+    for(const {layer,lines} of teachingGeometry){
+      if(!visible.includes(layer.id))continue;
+      for(const line of lines){
+        for(let i=1;i<line.length;i++){
+          const a=t(line[i-1]!.clone().multiplyScalar(1.008));
+          const b=t(line[i]!.clone().multiplyScalar(1.008));
+          if(!visiblePoint(a,camera,view,showSphere)||!visiblePoint(b,camera,view,showSphere))continue;
+          const pa=projectPoint(a,camera,w,h),pb=projectPoint(b,camera,w,h);
+          if(!pa||!pb)continue;
+          const dx=pb[0]-pa[0],dy=pb[1]-pa[1],len=dx*dx+dy*dy;
+          const ratio=len>0?Math.max(0,Math.min(1,((pixel[0]-pa[0])*dx+(pixel[1]-pa[1])*dy)/len)):0;
+          const distance=Math.hypot(pixel[0]-pa[0]-ratio*dx,pixel[1]-pa[1]-ratio*dy);
+          if(distance<Math.min(nearest,16)){
+            nearest=distance;
+            best={id:"geometry:"+layer.id,type:"mark",position:t(new THREE.Vector3(...a).lerp(new THREE.Vector3(...b),ratio))};
+          }
+        }
+      }
+    }
+    if(!best){setInfo("Join: click a drawn line endpoint or any visible part of a celestial circle/arc.");return;}
+    if(!joinFrom){setJoinFrom(best);setInfo("First point selected. Click a point on another line, circle, or arc.");return;}
     if(joinFrom.id===best.id&&joinFrom.type===best.type&&
        joinFrom.position.every((x,i)=>Math.abs(x-best!.position[i]!)<0.0001)){
-      setInfo("Choose a different endpoint.");return;
+      setInfo("Choose a different point.");return;
     }
     snapshot();
     if(joinFrom.type==="mark"&&best.type==="mark"){
@@ -666,7 +694,7 @@ export function ClassroomApp(){
       const steps=Math.max(2,Math.ceil(from.distanceTo(to)*130));
       const points=Array.from({length:steps},(_,i):Vec=>t(from.clone().lerp(to,i/(steps-1))));
       setMarks(old=>[...old,{id:makeId(),points,color,width,surface:false,inside:false,kind:"line"}]);
-      setInfo("Joined line endpoints with a true free-space 3D segment.");
+      setInfo("Joined two lines or celestial circles with a free-space 3D segment.");
     }else{
       const toScreen=(end:JoinEndpoint):XY=>{
         if(end.type==="stroke")return end.position;
@@ -1159,7 +1187,7 @@ export function ClassroomApp(){
         <button className={"classroom-feature-action"+(tool==="join"?" on":"")} type="button"
           onClick={()=>chooseTool(tool==="join"?"orbit":"join")}><Link2 size={16}/> Join endpoints</button>
         <p className="classroom-hint">Click an endpoint of any existing line, then a second endpoint.
-          3D lines join in free space without forcing the join onto the sphere; flat ink lines join on the board.</p>
+          Astronomical circles and 3D lines connect through free space, not along the sphere. Flat ink lines join on the board.</p>
       </div>
       <div className="classroom-tool-section classroom-instrument-controls">
         <div className="classroom-section-title"><Ruler size={15}/> Teaching instruments</div>
@@ -1253,6 +1281,6 @@ export function ClassroomApp(){
         <button onClick={()=>{setMarks([]);setStrokes([]);setTexts([]);setJoinFrom(null);setHistory([]);setFuture([]);setCompassVisible(false);setPending(null);setPendingScreen(null);setPendingVertices([]);setPendingScreenVertices([]);setEdit(null);setShowSphere(true);setShowNames(true);setRulerVisible(false);setProtractorVisible(false);setVisible(DEFAULT_VISIBLE);setSeasons(SEASONS.map(s=>s.longitude));setZenith(true);setNadir(true);setDirections(true);setView("outside");setCmd(old=>({number:old.number+1,dir:[0,0,1]}));setShape(true);chooseTool("orbit");}}><RotateCcw size={15}/> Reset</button>
       </div>
     </aside>
-    <div className="classroom-screenreader-status" role="status" aria-live="polite">{info}</div>
+    <div className="classroom-action-status" role="status" aria-live="polite">{info}</div>
   </main>;
 }
