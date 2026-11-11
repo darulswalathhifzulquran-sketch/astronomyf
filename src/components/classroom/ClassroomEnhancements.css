@@ -204,3 +204,147 @@
   font-weight: 650;
   flex: 0 0 auto;
 }
+
+
+/* Optional name assigned only after a line is committed.
+ * The 3D label is an Html anchor at the physical midpoint of its line;
+ * it moves with the line when the Classroom camera rotates. */
+.classroom-v2 .classroom-drawn-line-name {
+  display: block;
+  max-width: 190px;
+  padding: 3px 7px;
+  border-radius: 7px;
+  background: rgba(5,19,35,.72);
+  border: 1px solid rgba(180,223,255,.25);
+  color: #f9fcff;
+  font: 700 15px/1.5 "Amiri","Noto Naskh Arabic","IBM Plex Sans",sans-serif;
+  text-align: center;
+  text-shadow: 0 1px 2px rgba(0,0,0,.8);
+  pointer-events: none;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  transform: translateY(-23px);
+}
+.classroom-v2 .classroom-ink-name {
+  fill: #fff;
+  stroke: #07172b;
+  stroke-width: 3.8px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  paint-order: stroke fill;
+  font: 700 16px/1.4 "Amiri","Noto Naskh Arabic","IBM Plex Sans",sans-serif;
+  pointer-events: none;
+  user-select: none;
+}
+.classroom-v2 .classroom-line-name-section .classroom-project-actions {
+  grid-template-columns: repeat(2,minmax(0,1fr));
+}
+.classroom-v2 .classroom-line-name-section .classroom-project-actions button {
+  min-height: 40px;
+}
+.classroom-v2 .classroom-name-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(12px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right))
+    max(12px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));
+  background: rgba(3,12,24,.60);
+  overscroll-behavior: contain;
+}
+.classroom-v2 .classroom-name-dialog {
+  width: min(425px,100%);
+  max-height: min(78dvh,620px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: clamp(16px,3vw,25px);
+  border: 1px solid rgba(255,255,255,.8);
+  border-radius: 21px;
+  background: linear-gradient(140deg,#f8fcff,#dfecfa);
+  color: #1c395c;
+  box-shadow: 0 16px 40px rgba(0,0,0,.36);
+  font-family: "IBM Plex Sans",Arial,sans-serif;
+}
+.classroom-v2 .classroom-name-kicker {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .11em;
+  color: #4b729d;
+}
+.classroom-v2 .classroom-name-dialog h2 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 800;
+  color: #18395c;
+}
+.classroom-v2 .classroom-name-description {
+  margin: 0 0 5px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #4c6b89;
+}
+.classroom-v2 .classroom-name-progress { display: block; margin-top: 6px; color: #236bad; }
+.classroom-v2 .classroom-name-dialog label {
+  font-size: 11px; font-weight: 750; color: #284b72;
+}
+.classroom-v2 .classroom-name-dialog input[type="text"] {
+  display: block;
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 13px;
+  border: 1px solid #abc5e3;
+  border-radius: 12px;
+  background: #fff;
+  color: #123454;
+  text-align: start;
+  font: 600 17px/1.6 "Amiri","Noto Naskh Arabic","IBM Plex Sans",sans-serif;
+}
+.classroom-v2 .classroom-name-dialog input:focus-visible {
+  outline: 2px solid #287bdd;
+  outline-offset: 1px;
+}
+.classroom-v2 .classroom-line-name-actions {
+  display: flex; align-items: center; justify-content: stretch;
+  gap: 10px; margin-top: 8px;
+}
+.classroom-v2 .classroom-line-name-actions button {
+  flex: 1;
+  min-height: 46px;
+  padding: 9px 10px;
+  display: inline-flex; justify-content: center; align-items: center;
+  gap: 6px;
+  border-radius: 11px;
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+}
+.classroom-v2 .classroom-name-skip {
+  border: 1px solid #a9bdd3;
+  background: #edf4fb;
+  color: #24476c;
+}
+.classroom-v2 .classroom-name-confirm {
+  border: 1px solid #2367b9;
+  color: #fff;
+  background: #1e70cc;
+}
+.classroom-v2 .classroom-name-confirm:disabled {
+  background: #99afc9;
+  border-color: #99afc9;
+  opacity: .6;
+  cursor: not-allowed;
+}
+@media (max-width: 620px) {
+  .classroom-v2 .classroom-drawn-line-name {
+    max-width: 135px;
+    font-size: 12px;
+    padding: 2px 5px;
+  }
+  .classroom-v2 .classroom-ink-name { font-size: 13px; }
+  .classroom-v2 .classroom-name-dialog { border-radius: 16px; gap: 9px; }
+  .classroom-v2 .classroom-line-name-actions button { min-height: 48px; }
+}

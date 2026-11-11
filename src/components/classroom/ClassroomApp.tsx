@@ -12,6 +12,7 @@ import { greatCircle, planeNormal, slerpArc, V } from "@/lib/astronomy/math";
 import { ClassroomInstrument, type RulerPose, type AngleDrawing } from "./ClassroomInstruments";
 import { ClassroomCompass, type CompassDrawing } from "./ClassroomCompass";
 import { ClassroomTextMesh, type TextAnnotation } from "./ClassroomTextMesh";
+import { cleanLineName, isValidStoredLineName, lineLabelPoint2D, lineLabelPoint3D } from "./lineLabels";
 import { newProjectId, readProjects, writeProjects, type SavedProject } from "./projectStorage";
 import { centerAxisPaths, interpolate2, interpolate3, nearestProjectedSegment, perspectiveCorrectRatio } from "./joinGeometry";
 import "./Classroom.css";
@@ -22,9 +23,10 @@ type XY = [number,number];
 type Tool = "orbit" | "pen" | "line" | "ruler" | "eraser" | "triangle" | "protractor" | "join" | "text3d";
 type Place = "inside" | "outside";
 type View = "outside" | "inside";
-type Mark = {id:string;points:Vec[];color:string;width:number;surface:boolean;inside:boolean;measure?:string|undefined;anchorA?:Vec|undefined;anchorB?:Vec|undefined;kind?:"pen"|"line"|"ruler"};
-type Stroke = {id:string;points:XY[];color:string;width:number;measure?:{x:number;y:number;label:string}};
+type Mark = {id:string;points:Vec[];color:string;width:number;surface:boolean;inside:boolean;measure?:string|undefined;anchorA?:Vec|undefined;anchorB?:Vec|undefined;kind?:"pen"|"line"|"ruler";name?:string|undefined};
+type Stroke = {id:string;points:XY[];color:string;width:number;measure?:{x:number;y:number;label:string};name?:string|undefined};
 type Snapshot = {marks:Mark[];strokes:Stroke[];texts:TextAnnotation[]};
+type NameTask = {kind:"mark"|"stroke";ids:string[];index:number;editing:boolean};
 type JoinEndpoint = {id:string;type:"mark";position:Vec} | {id:string;type:"stroke";position:XY};
 type GeometryEntry = {layer:LayerDef;lines:THREE.Vector3[][];label:THREE.Vector3|undefined};
 type ProjectData = {
@@ -45,12 +47,12 @@ function validProjectData(value:unknown):value is ProjectData {
     Array.isArray(p.marks)&&p.marks.length<1000&&p.marks.every(m=>!!m&&typeof m.id==="string"&&
       typeof m.color==="string"&&/^#[0-9a-fA-F]{6}$/.test(m.color)&&
       typeof m.width==="number"&&m.width>=1&&m.width<=9&&
-      typeof m.surface==="boolean"&&typeof m.inside==="boolean"&&
+      typeof m.surface==="boolean"&&typeof m.inside==="boolean"&&isValidStoredLineName(m.name)&&
       Array.isArray(m.points)&&m.points.length>=2&&m.points.length<2000&&m.points.every(v=>coord(v,3))&&
       (!m.anchorA||coord(m.anchorA,3))&&(!m.anchorB||coord(m.anchorB,3)))&&
     Array.isArray(p.strokes)&&p.strokes.length<1000&&p.strokes.every(m=>!!m&&typeof m.id==="string"&&
       typeof m.color==="string"&&/^#[0-9a-fA-F]{6}$/.test(m.color)&&
-      typeof m.width==="number"&&m.width>=1&&m.width<=9&&
+      typeof m.width==="number"&&m.width>=1&&m.width<=9&&isValidStoredLineName(m.name)&&
       Array.isArray(m.points)&&m.points.length>=2&&m.points.length<8000&&m.points.every(v=>coord(v,2)))&&
     Array.isArray(p.texts)&&p.texts.length<200&&p.texts.every(x=>!!x&&typeof x.id==="string"&&
       typeof x.value==="string"&&x.value.length<=100&&typeof x.color==="string"&&
@@ -141,7 +143,7 @@ function cutMark(mark:Mark,p:XY,camera:THREE.Camera,w:number,h:number,view:View,
   if(!pts.some(q=>q&&Math.hypot(q[0]-p[0],q[1]-p[1])<radius))return [mark];
   let buffer:Vec[]=[];const pieces:Mark[]=[];
   const flush=()=>{if(buffer.length>=2)pieces.push({...mark,id:mark.id+"-cut-"+pieces.length,points:buffer,
-    anchorA:undefined,anchorB:undefined,measure:undefined});buffer=[];};
+    anchorA:undefined,anchorB:undefined,measure:undefined,name:pieces.length===0?mark.name:undefined});buffer=[];};
   for(let i=0;i<mark.points.length;i++){
     const q=pts[i];if(q&&Math.hypot(q[0]-p[0],q[1]-p[1])<radius)flush();
     else buffer.push(mark.points[i]!);
@@ -152,7 +154,7 @@ function cutInk(stroke:Stroke,p:XY,w:number,h:number,radius=15):Stroke[]{
   const near=stroke.points.some(q=>Math.hypot(q[0]*w-p[0],q[1]*h-p[1])<radius);
   if(!near)return [stroke];
   let buffer:XY[]=[];const pieces:Stroke[]=[];
-  const flush=()=>{if(buffer.length>=2)pieces.push({...stroke,id:stroke.id+"-cut-"+pieces.length,points:buffer});buffer=[];};
+  const flush=()=>{if(buffer.length>=2)pieces.push({...stroke,id:stroke.id+"-cut-"+pieces.length,points:buffer,name:pieces.length===0?stroke.name:undefined});buffer=[];};
   for(const q of stroke.points){if(Math.hypot(q[0]*w-p[0],q[1]*h-p[1])<radius)flush();else buffer.push(q);}
   flush();return pieces;
 }
@@ -328,11 +330,16 @@ function ClassroomCamera({view,cmd,enabled}:{view:View;cmd:CameraCmd;enabled:boo
 function MarkLine({mark,view,showSphere,edit,onBeginEdit}:{mark:Mark;view:View;showSphere:boolean;edit:Edit|null;onBeginEdit:(id:string,endpoint:0|1)=>void}){
   if(mark.points.length<2)return null;
   const midpoint=mark.points[Math.floor(mark.points.length/2)]!;
+  const namePoint=mark.name?lineLabelPoint3D(mark.points):null;
   return <group>
     <Line points={mark.points.map(p=>new THREE.Vector3(...p))}
       color={mark.color} lineWidth={mark.width+0.7}
       opacity={1} transparent depthTest={mark.surface&&showSphere&&view==="outside"}
       depthWrite={false} raycast={()=>null}/>
+    {namePoint&&mark.name&&<Html position={new THREE.Vector3(...namePoint)} center
+      zIndexRange={[9,0]} style={{pointerEvents:"none"}}>
+      <span className="classroom-drawn-line-name" dir="auto" title={mark.name}>{mark.name}</span>
+    </Html>}
     {mark.measure&&<Html position={new THREE.Vector3(...midpoint)} center style={{pointerEvents:"none"}}>
       <span className="classroom-measure-label">{mark.measure}</span>
     </Html>}
@@ -454,6 +461,15 @@ export function ClassroomApp(){
   const [edit,setEdit]=useState<Edit|null>(null);
   const [marks,setMarks]=useState<Mark[]>([]);
   const [texts,setTexts]=useState<TextAnnotation[]>([]);
+  const [nameTask,setNameTask]=useState<NameTask|null>(null);
+  const [nameDraft,setNameDraft]=useState("");
+  const [selectedLineKey,setSelectedLineKey]=useState("");
+  const nameInputRef=useRef<HTMLInputElement|null>(null);
+  useEffect(()=>{
+    if(nameTask&&typeof window!=="undefined"&&!window.matchMedia("(pointer: coarse)").matches){
+      nameInputRef.current?.focus();
+    }
+  },[nameTask]);
   const [textInput,setTextInput]=useState("السَّمَاءُ");
   const [textSize,setTextSize]=useState(0.18);
   const [joinFrom,setJoinFrom]=useState<JoinEndpoint|null>(null);
@@ -482,8 +498,56 @@ export function ClassroomApp(){
   },[]);
   const gesture=useRef<Gesture|null>(null);
   const nextId=useRef(1);
-  const makeId=()=>String(nextId.current++);
+  const makeId=()=>("draw-"+Date.now().toString(36)+"-"+(nextId.current++).toString(36)+"-"+Math.random().toString(36).slice(2,7));
   const snapshot=useCallback(()=>{setHistory(old=>[...old,{marks,strokes,texts}]);setFuture([]);},[marks,strokes,texts]);
+  /** Drawing is already committed before this optional naming step. */
+  const requestLineNames=useCallback((kind:NameTask["kind"],ids:string[])=>{
+    if(!ids.length)return;
+    setNameDraft("");
+    setNameTask({kind,ids,index:0,editing:false});
+  },[]);
+  const finishLineName=(save:boolean)=>{
+    if(!nameTask)return;
+    const id=nameTask.ids[nameTask.index];
+    const name=cleanLineName(nameDraft);
+    if(id&&save&&name){
+      // Newly drawn lines remain a single Undo action with the optional name.
+      // Renaming an older line is a separate undoable edit.
+      if(nameTask.editing)snapshot();
+      if(nameTask.kind==="mark")
+        setMarks(old=>old.map(line=>line.id===id?{...line,name}:line));
+      else
+        setStrokes(old=>old.map(line=>line.id===id?{...line,name}:line));
+    }
+    if(nameTask.index+1<nameTask.ids.length){
+      setNameTask({...nameTask,index:nameTask.index+1});
+      setNameDraft("");
+      setInfo(save&&name?"Line named. Name the next line or skip.":"Line kept without a name. Next line:");
+    }else{
+      setNameTask(null);setNameDraft("");
+      setInfo(nameTask.editing
+        ?save&&name?"Line name updated.":"Name edit canceled."
+        :save&&name?"Line finished and its name is attached.":"Line finished without a name.");
+    }
+  };
+  const selectedLine=selectedLineKey.startsWith("mark:")
+    ?marks.find(line=>line.id===selectedLineKey.slice(5))
+    :selectedLineKey.startsWith("stroke:")
+      ?strokes.find(line=>line.id===selectedLineKey.slice(7)):undefined;
+  const editSelectedLineName=()=>{
+    if(!selectedLine)return;
+    const kind:NameTask["kind"]=selectedLineKey.startsWith("mark:")?"mark":"stroke";
+    setNameDraft(selectedLine.name??"");
+    setNameTask({kind,ids:[selectedLine.id],index:0,editing:true});
+  };
+  const removeSelectedLineName=()=>{
+    if(!selectedLine?.name)return;
+    snapshot();
+    if(selectedLineKey.startsWith("mark:"))
+      setMarks(old=>old.map(line=>line.id===selectedLine.id?{...line,name:undefined}:line));
+    else setStrokes(old=>old.map(line=>line.id===selectedLine.id?{...line,name:undefined}:line));
+    setInfo("Line name removed. The drawing is preserved.");
+  };
 
   const chooseTool=(next:Tool)=>{
     setTool(next);setPending(null);setPendingScreen(null);setPendingVertices([]);setPendingScreenVertices([]);setDrawing(null);setHollowPenDraft([]);hollowDraftRef.current=[];setEdit(null);setJoinFrom(null);
@@ -529,8 +593,10 @@ export function ClassroomApp(){
       if(!pending){setPending(point);setInfo("First internal endpoint selected. Choose the other endpoint.");return;}
       if(angle(pending,point)<.006)return;
       snapshot();
-      setMarks(old=>[...old,{id:makeId(),anchorA:pending,anchorB:point,kind:"line",
+      const id=makeId();
+      setMarks(old=>[...old,{id,anchorA:pending,anchorB:point,kind:"line",
         points:segmentInSphere(pending,point),color,width,surface:false,inside:true}]);
+      requestLineNames("mark",[id]);
       setPending(null);
       setInfo("Hollow 3D straight chord drawn through the sphere interior.");
       return;
@@ -553,6 +619,7 @@ export function ClassroomApp(){
         kind:"line",measure:tool==="protractor"&&index===0?angleAt(b,a,c).toFixed(1)+"°":undefined,
       }));
       setMarks(old=>[...old,...newMarks]);
+      requestLineNames("mark",newMarks.map(mark=>mark.id));
       setPendingVertices([]);
       setInfo(tool==="triangle"?"A three-sided surface triangle is drawn.":"Spherical angle: "+angleAt(b,a,c).toFixed(1)+"°");
       return;
@@ -561,13 +628,15 @@ export function ClassroomApp(){
     if(angle(pending,point)<0.006){setInfo("Choose a different point.");return;}
     const a=pending,b=point;
     snapshot();
+    const id=makeId();
     setMarks(old=>[...old,{
-      id:makeId(),points:shapePath(a,b,view==="inside"),
+      id,points:shapePath(a,b,view==="inside"),
       anchorA:a,anchorB:b,color,width,
       kind:tool==="ruler"?"ruler":tool==="pen"?"pen":"line",
       surface:true,inside:view==="inside",
       measure:tool==="ruler"?deg(a,b)+"°":undefined,
     }]);
+    requestLineNames("mark",[id]);
     if(tool==="pen"){
       setPending(point);
       setInfo("Surface stroke added. Click again to continue, drag the globe to rotate.");
@@ -575,7 +644,7 @@ export function ClassroomApp(){
       setPending(null);
       setInfo("Line follows the ball skin. Double-click a handle to adjust it.");
     }
-  },[edit,tool,shape,pending,pendingVertices,view,color,width,snapshot,moveEndpoint,textInput,textSize]);
+  },[edit,tool,shape,pending,pendingVertices,view,color,width,snapshot,moveEndpoint,textInput,textSize,requestLineNames]);
 
   // All pointer positions are relative to the SAME classroom stage, in CSS pixels.
   // Camera raycasting, SVG ink, hit-testing and eraser visuals share this frame.
@@ -628,7 +697,9 @@ export function ClassroomApp(){
         x:(a[0]+b[0])/2,y:(a[1]+b[1])/2,
         label:(dist2(px(a),px(b))/17.5).toFixed(1)+" diagram cm",
       }:undefined;
-      setStrokes(old=>[...old,{id:makeId(),color,width,points:pts,...(measure?{measure}:{})}]);
+      const id=makeId();
+      setStrokes(old=>[...old,{id,color,width,points:pts,...(measure?{measure}:{})}]);
+      requestLineNames("stroke",[id]);
       setPendingScreen(null);
       setInfo(tool==="line"?"A straight line was drawn, independent of the sphere.":"Ruler: measured a straight diagram-space distance.");
       return;
@@ -654,7 +725,9 @@ export function ClassroomApp(){
       }
       const measure=tool==="protractor"?{x:a[0],y:a[1],label:planarAngle(b,a,c).toFixed(1)+"°"}:undefined;
       snapshot();
-      setStrokes(old=>[...old,{id:makeId(),points,color,width,...(measure?{measure}:{})}]);
+      const id=makeId();
+      setStrokes(old=>[...old,{id,points,color,width,...(measure?{measure}:{})}]);
+      requestLineNames("stroke",[id]);
       setPendingScreenVertices([]);
       setInfo(tool==="triangle"?"Straight triangle completed.":"Measured angle: "+planarAngle(b,a,c).toFixed(1)+"°");
     }
@@ -758,7 +831,9 @@ export function ClassroomApp(){
       const a=joinFrom.position,b=best.position;
       // Two 3D points define a straight chord, not a sphere-surface curve.
       const points:Vec[]=[a,b];
-      setMarks(old=>[...old,{id:makeId(),points,color,width,surface:false,inside:true,kind:"line"}]);
+      const id=makeId();
+      setMarks(old=>[...old,{id,points,color,width,surface:false,inside:true,kind:"line"}]);
+      requestLineNames("mark",[id]);
       setInfo("3D Join completed: connected the two selected positions.");
     }else{
       // A board-space annotation has no fixed 3D depth. Mixed joins
@@ -769,7 +844,9 @@ export function ClassroomApp(){
         return p?[p[0]/w,p[1]/h]:normalizedFromPixel(pixel);
       };
       const a=toScreen(joinFrom),b=toScreen(best);
-      setStrokes(old=>[...old,{id:makeId(),points:[a,b],color,width}]);
+      const id=makeId();
+      setStrokes(old=>[...old,{id,points:[a,b],color,width}]);
+      requestLineNames("stroke",[id]);
       setInfo("Join completed in the whiteboard plane.");
     }
     setJoinFrom(null);
@@ -880,7 +957,11 @@ export function ClassroomApp(){
       if(!g.dragged)joinAt(p);
     }else if(g.kind==="hollow-pen"){
       const points=hollowDraftRef.current;
-      if(points.length>1)setMarks(old=>[...old,{id:makeId(),points,color,width,surface:false,inside:true,kind:"pen"}]);
+      if(points.length>1){
+        const id=makeId();
+        setMarks(old=>[...old,{id,points,color,width,surface:false,inside:true,kind:"pen"}]);
+        requestLineNames("mark",[id]);
+      }
       hollowDraftRef.current=[];
       setHollowPenDraft([]);
       setInfo("Free 3D pen: successive straight segments run through the hollow interior.");
@@ -888,6 +969,7 @@ export function ClassroomApp(){
       if(drawing){
         const points=drawing.points.length===1?[drawing.points[0]!,drawing.points[0]!]:drawing.points;
         setStrokes(old=>[...old,{...drawing,points}]);
+        requestLineNames("stroke",[drawing.id]);
       }
       setDrawing(null);
     }else if(g.kind==="erase"){
@@ -949,11 +1031,13 @@ export function ClassroomApp(){
     const label:Stroke["measure"]={x:midpoint[0]/stageSize[0],y:midpoint[1]/stageSize[1],
       label:instrument.degrees.toFixed(0)+"°"};
     snapshot();
+    const ids=[makeId(),makeId(),makeId()];
     setStrokes(old=>[...old,
-      {id:makeId(),color,width,points:normalizedPoints(lerp(center,start,36))},
-      {id:makeId(),color,width,points:normalizedPoints(lerp(center,end,36))},
-      {id:makeId(),color:"#ffc14f",width:Math.max(1,width-1),points:normalizedPoints(arc),measure:label}
+      {id:ids[0]!,color,width,points:normalizedPoints(lerp(center,start,36))},
+      {id:ids[1]!,color,width,points:normalizedPoints(lerp(center,end,36))},
+      {id:ids[2]!,color:"#ffc14f",width:Math.max(1,width-1),points:normalizedPoints(arc),measure:label}
     ]);
+    requestLineNames("stroke",ids);
     setInfo("Protractor "+instrument.degrees.toFixed(0)+"° angle added to the board.");
   };
   const hasCenter=marks.some(mark=>mark.id==="center-axis-horizontal"||mark.id==="center-axis-vertical");
@@ -970,6 +1054,7 @@ export function ClassroomApp(){
         {id:"center-axis-vertical",points:vertical,color,width:Math.max(2,width),
           surface:false,inside:true,kind:"line"},
       ]);
+      requestLineNames("mark",["center-axis-horizontal","center-axis-vertical"]);
       setInfo("Center added: horizontal E–W and vertical Zenith–Nadir lines intersect at the exact 3D origin (0,0,0).");
     }
   };
@@ -997,14 +1082,16 @@ export function ClassroomApp(){
   const addCompassArc=(draw:CompassDrawing)=>{
     if(draw.points.length<2)return;
     snapshot();
-    setStrokes(old=>[...old,{id:makeId(),color,width,
+    const id=makeId();
+    setStrokes(old=>[...old,{id,color,width,
       points:draw.points.map(([x,y]):XY=>[x/stageSize[0],y/stageSize[1]])}]);
+    requestLineNames("stroke",[id]);
     setInfo("Compass circle / arc drawn accurately on the whiteboard.");
   };
   const clear=()=>{
     if(!marks.length&&!strokes.length&&!texts.length&&!pending&&!pendingScreen&&!pendingVertices.length&&!pendingScreenVertices.length)return;
     if(!window.confirm("Clear all classroom drawings?"))return;
-    snapshot();setMarks([]);setStrokes([]);setTexts([]);setJoinFrom(null);setPending(null);setPendingScreen(null);setPendingVertices([]);setPendingScreenVertices([]);setDrawing(null);setEdit(null);
+    snapshot();setNameTask(null);setMarks([]);setStrokes([]);setTexts([]);setJoinFrom(null);setPending(null);setPendingScreen(null);setPendingVertices([]);setPendingScreenVertices([]);setDrawing(null);setEdit(null);
     setInfo("Teacher drawings cleared; the original astronomical circles remain.");
   };
 
@@ -1015,6 +1102,7 @@ export function ClassroomApp(){
     setSeasons(data.seasons);setShowSphere(data.showSphere);setShowNames(data.showNames);
     setView(data.view);setShape(data.shape);setPlacement(data.placement);
     setColor(data.color);setHexDraft(data.color);setWidth(data.width);
+    setNameTask(null);setNameDraft("");setSelectedLineKey("");
     setMarks(data.marks);setStrokes(data.strokes);setTexts(data.texts);
     setHistory([]);setFuture([]);chooseTool("orbit");
     setCmd(old=>({number:old.number+1,dir:[0,0,1]}));
@@ -1086,6 +1174,7 @@ export function ClassroomApp(){
   };
   const newProject=()=>{
     if(!window.confirm("Start a new classroom? Export or Save any unsaved changes first."))return;
+    setNameTask(null);setNameDraft("");setSelectedLineKey("");
     setMarks([]);setStrokes([]);setTexts([]);setHistory([]);setFuture([]);
     setVisible(DEFAULT_VISIBLE);setSeasons(SEASONS.map(x=>x.longitude));
     setZenith(true);setNadir(true);setDirections(true);setShowSphere(true);setShowNames(true);
@@ -1129,6 +1218,10 @@ export function ClassroomApp(){
         {[...strokes,...(drawing?[drawing]:[])].map(line=><g key={line.id}>
           <path d={inkPath(line.points,stageSize)} fill="none" stroke={line.color}
             strokeWidth={line.width*1.8} strokeLinecap="round" strokeLinejoin="round"/>
+          {line.name&&(()=>{const p=lineLabelPoint2D(line.points,stageSize[0],stageSize[1]);
+            return p&&<text x={p[0]*stageSize[0]} y={p[1]*stageSize[1]-(line.measure?32:17)}
+              className="classroom-ink-name" direction="auto" textAnchor="middle">{line.name}</text>;
+          })()}
           {line.measure&&<text x={line.measure.x*stageSize[0]} y={line.measure.y*stageSize[1]-11}
             fill="#fff1ae" fontSize={14} fontWeight="700" textAnchor="middle">{line.measure.label}</text>}
         </g>)}
@@ -1267,6 +1360,32 @@ export function ClassroomApp(){
         <p className="classroom-hint">Projects stay in this browser until deleted or browser data is cleared.
           Export JSON to back up or move a project to another device.</p>
       </div>
+      <div className="classroom-tool-section classroom-line-name-section">
+        <div className="classroom-section-title"><Type size={15}/> Names on drawn lines</div>
+        <p className="classroom-hint">After finishing any drawn line, you can attach a name or
+          finish without a name. Names follow 3D lines when the globe rotates and are
+          saved with your project. You can also rename older lines here.</p>
+        <label className="classroom-project-label">Choose a drawn line
+          <select aria-label="Select line to add, edit or remove its name" value={selectedLineKey}
+            onChange={e=>setSelectedLineKey(e.target.value)}>
+            <option value="">Select a drawn line...</option>
+            {marks.map((mark,i)=><option key={"mark:"+mark.id} value={"mark:"+mark.id}>
+              {mark.name||("3D line "+(i+1)+" (unnamed)")}
+            </option>)}
+            {strokes.map((stroke,i)=><option key={"stroke:"+stroke.id} value={"stroke:"+stroke.id}>
+              {stroke.name||("Whiteboard line "+(i+1)+" (unnamed)")}
+            </option>)}
+          </select>
+        </label>
+        <div className="classroom-project-actions">
+          <button type="button" disabled={!selectedLine} onClick={editSelectedLineName}>
+            <Pencil size={15}/> {selectedLine?.name?"Rename":"Add name"}
+          </button>
+          <button type="button" disabled={!selectedLine?.name} onClick={removeSelectedLineName}>
+            <Trash2 size={15}/> Remove name
+          </button>
+        </div>
+      </div>
       <div className="classroom-tool-section classroom-text-section">
         <div className="classroom-section-title"><Type size={15}/> 3D Text</div>
         <label className="classroom-project-label">Label (Arabic / English)
@@ -1395,9 +1514,39 @@ export function ClassroomApp(){
       <div className="classroom-actions">
         <button onClick={undo} disabled={!edit&&!pending&&!pendingScreen&&!pendingVertices.length&&!pendingScreenVertices.length&&!history.length}><Undo2 size={15}/> Undo</button>
         <button onClick={clear} disabled={!pending&&!pendingScreen&&!pendingVertices.length&&!pendingScreenVertices.length&&marks.length===0&&strokes.length===0&&texts.length===0}><Eraser size={15}/> Clear</button>
-        <button onClick={()=>{setMarks([]);setStrokes([]);setTexts([]);setJoinFrom(null);setHistory([]);setFuture([]);setCompassVisible(false);setPending(null);setPendingScreen(null);setPendingVertices([]);setPendingScreenVertices([]);setEdit(null);setShowSphere(true);setShowNames(true);setRulerVisible(false);setProtractorVisible(false);setVisible(DEFAULT_VISIBLE);setSeasons(SEASONS.map(s=>s.longitude));setZenith(true);setNadir(true);setDirections(true);setView("outside");setCmd(old=>({number:old.number+1,dir:[0,0,1]}));setShape(true);chooseTool("orbit");}}><RotateCcw size={15}/> Reset</button>
+        <button onClick={()=>{setNameTask(null);setSelectedLineKey("");setNameDraft("");setMarks([]);setStrokes([]);setTexts([]);setJoinFrom(null);setHistory([]);setFuture([]);setCompassVisible(false);setPending(null);setPendingScreen(null);setPendingVertices([]);setPendingScreenVertices([]);setEdit(null);setShowSphere(true);setShowNames(true);setRulerVisible(false);setProtractorVisible(false);setVisible(DEFAULT_VISIBLE);setSeasons(SEASONS.map(s=>s.longitude));setZenith(true);setNadir(true);setDirections(true);setView("outside");setCmd(old=>({number:old.number+1,dir:[0,0,1]}));setShape(true);chooseTool("orbit");}}><RotateCcw size={15}/> Reset</button>
       </div>
     </aside>
+    {nameTask&&<div className="classroom-name-backdrop">
+      <form className="classroom-name-dialog" role="dialog" aria-modal="true"
+        aria-labelledby="classroom-name-title"
+        onSubmit={e=>{e.preventDefault();finishLineName(true);}}
+        onKeyDown={e=>{if(e.key==="Escape"){e.preventDefault();finishLineName(false);}}}>
+        <span className="classroom-name-kicker">{nameTask.editing?"EDIT LINE":"DRAWING FINISHED"}</span>
+        <h2 id="classroom-name-title">{nameTask.editing?"Edit line name":"Name this line?"}</h2>
+        <p className="classroom-name-description">
+          {nameTask.editing
+            ?"Change this line's attached name, or Cancel to keep its old name."
+            :"The line is already drawn. Add a 3D-positioned name, or finish without one."}
+          {nameTask.ids.length>1&&<strong className="classroom-name-progress">
+            {" Line "+(nameTask.index+1)+" of "+nameTask.ids.length}
+          </strong>}
+        </p>
+        <label htmlFor="classroom-line-name-input">Optional line name · عربي / മലയാളം / English</label>
+        <input id="classroom-line-name-input" ref={nameInputRef} type="text" dir="auto"
+          maxLength={80} autoComplete="off" placeholder="e.g. مُعَدِّلُ النَّهَارِ"
+          value={nameDraft} onChange={e=>setNameDraft(e.target.value)}/>
+        <div className="classroom-line-name-actions">
+          <button type="button" className="classroom-name-skip" onClick={()=>finishLineName(false)}>
+            {nameTask.editing?"Cancel":"Skip name · Finish"}
+          </button>
+          <button type="submit" className="classroom-name-confirm"
+            disabled={!cleanLineName(nameDraft)}>
+            <Check size={16}/> {nameTask.editing?"Update name":"Save name"}
+          </button>
+        </div>
+      </form>
+    </div>}
     <div className="classroom-action-status" role="status" aria-live="polite">{info}</div>
   </main>;
 }
