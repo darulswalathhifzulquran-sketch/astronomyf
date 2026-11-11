@@ -12,6 +12,7 @@ import { greatCircle, planeNormal, slerpArc, V } from "@/lib/astronomy/math";
 import { ClassroomInstrument, type RulerPose, type AngleDrawing } from "./ClassroomInstruments";
 import { ClassroomCompass, type CompassDrawing } from "./ClassroomCompass";
 import { ClassroomTextMesh, type TextAnnotation } from "./ClassroomTextMesh";
+import { cleanLineName, isValidStoredLineName, lineLabelPoint2D, lineLabelPoint3D } from "./lineLabels";
 import { newProjectId, readProjects, writeProjects, type SavedProject } from "./projectStorage";
 import { centerAxisPaths, interpolate2, interpolate3, nearestProjectedSegment, perspectiveCorrectRatio } from "./joinGeometry";
 import "./Classroom.css";
@@ -22,9 +23,10 @@ type XY = [number,number];
 type Tool = "orbit" | "pen" | "line" | "ruler" | "eraser" | "triangle" | "protractor" | "join" | "text3d";
 type Place = "inside" | "outside";
 type View = "outside" | "inside";
-type Mark = {id:string;points:Vec[];color:string;width:number;surface:boolean;inside:boolean;measure?:string|undefined;anchorA?:Vec|undefined;anchorB?:Vec|undefined;kind?:"pen"|"line"|"ruler"};
-type Stroke = {id:string;points:XY[];color:string;width:number;measure?:{x:number;y:number;label:string}};
+type Mark = {id:string;points:Vec[];color:string;width:number;surface:boolean;inside:boolean;measure?:string|undefined;anchorA?:Vec|undefined;anchorB?:Vec|undefined;kind?:"pen"|"line"|"ruler";name?:string};
+type Stroke = {id:string;points:XY[];color:string;width:number;measure?:{x:number;y:number;label:string};name?:string};
 type Snapshot = {marks:Mark[];strokes:Stroke[];texts:TextAnnotation[]};
+type NameTask = {kind:"mark"|"stroke";ids:string[];index:number;editing:boolean};
 type JoinEndpoint = {id:string;type:"mark";position:Vec} | {id:string;type:"stroke";position:XY};
 type GeometryEntry = {layer:LayerDef;lines:THREE.Vector3[][];label:THREE.Vector3|undefined};
 type ProjectData = {
@@ -45,12 +47,12 @@ function validProjectData(value:unknown):value is ProjectData {
     Array.isArray(p.marks)&&p.marks.length<1000&&p.marks.every(m=>!!m&&typeof m.id==="string"&&
       typeof m.color==="string"&&/^#[0-9a-fA-F]{6}$/.test(m.color)&&
       typeof m.width==="number"&&m.width>=1&&m.width<=9&&
-      typeof m.surface==="boolean"&&typeof m.inside==="boolean"&&
+      typeof m.surface==="boolean"&&typeof m.inside==="boolean"&&isValidStoredLineName(m.name)&&
       Array.isArray(m.points)&&m.points.length>=2&&m.points.length<2000&&m.points.every(v=>coord(v,3))&&
       (!m.anchorA||coord(m.anchorA,3))&&(!m.anchorB||coord(m.anchorB,3)))&&
     Array.isArray(p.strokes)&&p.strokes.length<1000&&p.strokes.every(m=>!!m&&typeof m.id==="string"&&
       typeof m.color==="string"&&/^#[0-9a-fA-F]{6}$/.test(m.color)&&
-      typeof m.width==="number"&&m.width>=1&&m.width<=9&&
+      typeof m.width==="number"&&m.width>=1&&m.width<=9&&isValidStoredLineName(m.name)&&
       Array.isArray(m.points)&&m.points.length>=2&&m.points.length<8000&&m.points.every(v=>coord(v,2)))&&
     Array.isArray(p.texts)&&p.texts.length<200&&p.texts.every(x=>!!x&&typeof x.id==="string"&&
       typeof x.value==="string"&&x.value.length<=100&&typeof x.color==="string"&&
@@ -141,7 +143,7 @@ function cutMark(mark:Mark,p:XY,camera:THREE.Camera,w:number,h:number,view:View,
   if(!pts.some(q=>q&&Math.hypot(q[0]-p[0],q[1]-p[1])<radius))return [mark];
   let buffer:Vec[]=[];const pieces:Mark[]=[];
   const flush=()=>{if(buffer.length>=2)pieces.push({...mark,id:mark.id+"-cut-"+pieces.length,points:buffer,
-    anchorA:undefined,anchorB:undefined,measure:undefined});buffer=[];};
+    anchorA:undefined,anchorB:undefined,measure:undefined,name:pieces.length===0?mark.name:undefined});buffer=[];};
   for(let i=0;i<mark.points.length;i++){
     const q=pts[i];if(q&&Math.hypot(q[0]-p[0],q[1]-p[1])<radius)flush();
     else buffer.push(mark.points[i]!);
@@ -152,7 +154,7 @@ function cutInk(stroke:Stroke,p:XY,w:number,h:number,radius=15):Stroke[]{
   const near=stroke.points.some(q=>Math.hypot(q[0]*w-p[0],q[1]*h-p[1])<radius);
   if(!near)return [stroke];
   let buffer:XY[]=[];const pieces:Stroke[]=[];
-  const flush=()=>{if(buffer.length>=2)pieces.push({...stroke,id:stroke.id+"-cut-"+pieces.length,points:buffer});buffer=[];};
+  const flush=()=>{if(buffer.length>=2)pieces.push({...stroke,id:stroke.id+"-cut-"+pieces.length,points:buffer,name:pieces.length===0?stroke.name:undefined});buffer=[];};
   for(const q of stroke.points){if(Math.hypot(q[0]*w-p[0],q[1]*h-p[1])<radius)flush();else buffer.push(q);}
   flush();return pieces;
 }
@@ -328,11 +330,16 @@ function ClassroomCamera({view,cmd,enabled}:{view:View;cmd:CameraCmd;enabled:boo
 function MarkLine({mark,view,showSphere,edit,onBeginEdit}:{mark:Mark;view:View;showSphere:boolean;edit:Edit|null;onBeginEdit:(id:string,endpoint:0|1)=>void}){
   if(mark.points.length<2)return null;
   const midpoint=mark.points[Math.floor(mark.points.length/2)]!;
+  const namePoint=mark.name?lineLabelPoint3D(mark.points):null;
   return <group>
     <Line points={mark.points.map(p=>new THREE.Vector3(...p))}
       color={mark.color} lineWidth={mark.width+0.7}
       opacity={1} transparent depthTest={mark.surface&&showSphere&&view==="outside"}
       depthWrite={false} raycast={()=>null}/>
+    {namePoint&&mark.name&&<Html position={new THREE.Vector3(...namePoint)} center
+      zIndexRange={[9,0]} style={{pointerEvents:"none"}}>
+      <span className="classroom-drawn-line-name" dir="auto" title={mark.name}>{mark.name}</span>
+    </Html>}
     {mark.measure&&<Html position={new THREE.Vector3(...midpoint)} center style={{pointerEvents:"none"}}>
       <span className="classroom-measure-label">{mark.measure}</span>
     </Html>}
@@ -1129,6 +1136,10 @@ export function ClassroomApp(){
         {[...strokes,...(drawing?[drawing]:[])].map(line=><g key={line.id}>
           <path d={inkPath(line.points,stageSize)} fill="none" stroke={line.color}
             strokeWidth={line.width*1.8} strokeLinecap="round" strokeLinejoin="round"/>
+          {line.name&&(()=>{const p=lineLabelPoint2D(line.points,stageSize[0],stageSize[1]);
+            return p&&<text x={p[0]*stageSize[0]} y={p[1]*stageSize[1]-17}
+              className="classroom-ink-name" direction="auto" textAnchor="middle">{line.name}</text>;
+          })()}
           {line.measure&&<text x={line.measure.x*stageSize[0]} y={line.measure.y*stageSize[1]-11}
             fill="#fff1ae" fontSize={14} fontWeight="700" textAnchor="middle">{line.measure.label}</text>}
         </g>)}
