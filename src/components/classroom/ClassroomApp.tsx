@@ -331,7 +331,7 @@ function ClassroomCamera({view,cmd,enabled}:{view:View;cmd:CameraCmd;enabled:boo
     minDistance={view==="inside"?0.002:1.3}
     maxDistance={view==="inside"?0.992:11}/>;
 }
-function MarkLine({mark,view,showSphere,edit,onBeginEdit}:{mark:Mark;view:View;showSphere:boolean;edit:Edit|null;onBeginEdit:(id:string,endpoint:0|1)=>void}){
+function MarkLine({mark,view,showSphere,edit}:{mark:Mark;view:View;showSphere:boolean;edit:Edit|null}){
   if(mark.points.length<2)return null;
   const midpoint=mark.points[Math.floor(mark.points.length/2)]!;
   const namePoint=mark.name?lineLabelPoint3D(mark.points):null;
@@ -361,11 +361,11 @@ function MarkLine({mark,view,showSphere,edit,onBeginEdit}:{mark:Mark;view:View;s
     })}
   </group>;
 }
-function Sphere({geometry,sky,lite,zenith,nadir,directions,seasons,marks,texts,pending,tool,color,view,cmd,showSphere,showNames,edit,draft,onBeginEdit}:{
+function Sphere({geometry,sky,lite,zenith,nadir,directions,seasons,marks,texts,pending,tool,color,view,cmd,showSphere,showNames,edit,draft}:{
  geometry:GeometryEntry[];sky:ReturnType<typeof computeSky>;lite:boolean;
  zenith:boolean;nadir:boolean;directions:boolean;seasons:number[];
  marks:Mark[];texts:TextAnnotation[];pending:Vec|null;tool:Tool;color:string;view:View;cmd:CameraCmd;showSphere:boolean;showNames:boolean;
- edit:Edit|null;draft:Vec[];onBeginEdit:(id:string,endpoint:0|1)=>void;
+ edit:Edit|null;draft:Vec[];
 }){
   // All tool positions are resolved once from stage-relative pointer coordinates.
   // The invisible sphere is visual-only here; stage handles click raycasting.
@@ -410,7 +410,7 @@ function Sphere({geometry,sky,lite,zenith,nadir,directions,seasons,marks,texts,p
         <sphereGeometry args={[0.026,12,12]}/>
         <meshBasicMaterial color="#fff2a7" depthTest={false} depthWrite={false}/>
       </mesh>}
-    {marks.map(mark=><MarkLine key={mark.id} mark={mark} view={view} showSphere={showSphere} edit={edit} onBeginEdit={onBeginEdit}/>)}
+    {marks.map(mark=><MarkLine key={mark.id} mark={mark} view={view} showSphere={showSphere} edit={edit}/>)}
     {draft.length>1&&<Line points={draft.map(p=>new THREE.Vector3(...p))} color={color}
       lineWidth={3} depthTest={false} depthWrite={false} raycast={()=>null}/>} 
     {pending&&<mesh raycast={()=>null} position={v(pending).multiplyScalar(view==="inside"?0.981:1.027)}>
@@ -592,11 +592,6 @@ export function ClassroomApp(){
       points[which.endpoint===0?0:points.length-1]=point;
       return {...mark,points};
     }));
-  },[]);
-  const onBeginEdit=useCallback((id:string,endpoint:0|1)=>{
-    setPending(null);setPendingScreen(null);
-    setEdit({id,endpoint,kind:"mark"});
-    setInfo("Edit 3D endpoint: tap its new destination. Undo can restore the original position.");
   },[]);
   const onPoint=useCallback((point:Vec)=>{
     if(edit&&edit.kind==="mark"){snapshot();moveEndpoint(edit,point);setEdit(null);setInfo("Endpoint moved. Undo restores the previous position.");return;}
@@ -1376,8 +1371,7 @@ export function ClassroomApp(){
         <Sphere geometry={teachingGeometry} sky={classroomSky} lite={lite}
           zenith={zenith} nadir={nadir} directions={directions} seasons={seasons}
           marks={marks} texts={texts} pending={pending} tool={tool} color={color} view={view} cmd={cmd}
-          showSphere={showSphere} showNames={showNames} edit={edit} draft={hollowPenDraft}
-          onBeginEdit={onBeginEdit}/>
+          showSphere={showSphere} showNames={showNames} edit={edit} draft={hollowPenDraft}/>
       </Canvas>
       <svg className="classroom-ink-layer" width="100%" height="100%"
         viewBox={"0 0 "+stageSize[0]+" "+stageSize[1]} preserveAspectRatio="none"
