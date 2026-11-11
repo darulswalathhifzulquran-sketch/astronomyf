@@ -501,7 +501,7 @@ export function ClassroomApp(){
   const [drawing,setDrawing]=useState<Stroke|null>(null);
   const [history,setHistory]=useState<Snapshot[]>([]);
   const [future,setFuture]=useState<Snapshot[]>([]);
-  const [info,setInfo]=useState("Draw on the ball · Double-click endpoints to edit · Hide Sphere for circles only.");
+  const [info,setInfo]=useState("Select: double-click a drawn line on PC, or hold it on touch. Hold a line end to edit.");
   const [eraserCursor,setEraserCursor]=useState<XY|null>(null);
   const cameraRef=useRef<THREE.Camera|null>(null);
   useEffect(()=>{
@@ -1176,6 +1176,15 @@ export function ClassroomApp(){
     e.preventDefault();e.stopPropagation();
     openLineActions(selection,pixel);
   };
+  const screenContextMenu=(e:ReactMouseEvent<HTMLElement>)=>{
+    if(tool!=="orbit")return;
+    // Prevent Android's native press-selection menu from covering our own.
+    e.preventDefault();
+    if(holdRef.current||edit||lineMenu||nameTask)return;
+    const pixel=pixelFromClient(e.clientX,e.clientY);
+    const selection=selectDrawnLine(pixel,false);
+    if(selection){e.stopPropagation();openLineActions(selection,pixel);}
+  };
   /** Commit protractor rays and angle to the board as editable/erasable screen ink. */
   const addInstrumentAngle=(instrument:AngleDrawing)=>{
     const [cx,cy]=instrument.center;
@@ -1371,6 +1380,7 @@ export function ClassroomApp(){
     <section ref={stageRef} className="classroom-stage" aria-label="Interactive celestial sphere"
       onPointerDownCapture={screenDown} onPointerMoveCapture={screenMove} onPointerUpCapture={screenUp}
       onPointerCancelCapture={screenCancel} onDoubleClickCapture={screenDoubleClick}
+      onContextMenuCapture={screenContextMenu}
       onPointerLeave={()=>setEraserCursor(null)}>
       <Canvas className="classroom-canvas" frameloop="demand" dpr={lite?1:[1,1.6]}
         gl={{alpha:true,antialias:!lite,powerPreference:lite?"low-power":"high-performance"}}
