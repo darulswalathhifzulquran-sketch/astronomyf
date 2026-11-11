@@ -7,7 +7,7 @@ import type { OrbitControls as OrbitImpl } from "three-stdlib";
 import { ArrowLeft, Check, Compass, Eraser, Eye, EyeOff, Maximize2, MousePointer2, Palette, PenLine, RotateCcw, Ruler, Slash, Undo2, X, Shapes, Triangle, DraftingCompass, Redo2, Settings2, Gauge, Save, FolderOpen, FilePlus2, FileDown, FileUp, Link2, Type, Trash2, Pencil, Crosshair } from "lucide-react";
 import { LAYERS, type LayerDef } from "@/data/layers";
 import { buildLayer } from "@/lib/astronomy/layerGeometry";
-import { computeSky } from "@/lib/astronomy/sky";
+import { computeSky, alignEquinoxesEastWest } from "@/lib/astronomy/sky";
 import { greatCircle, planeNormal, slerpArc, V } from "@/lib/astronomy/math";
 import { ClassroomInstrument, type RulerPose, type AngleDrawing } from "./ClassroomInstruments";
 import { ClassroomCompass, type CompassDrawing } from "./ClassroomCompass";
@@ -61,9 +61,9 @@ type Gesture = {pointer:number;kind:"screen"|"erase"|"free-line"|"edit"|"sphere"
 type Edit = {id:string;endpoint:0|1};
 type CameraCmd = {number:number;dir:Vec};
 const SEASONS = [
-  {longitude:0,ar:"الاعتدال الربيعي",en:"Vernal Equinox"},
+  {longitude:0,ar:"نُقْطَةُ الِاعْتِدَالِ الرَّبِيعِيِّ",en:"Vernal Equinox · East"},
   {longitude:90,ar:"الانقلاب الصيفي",en:"June Solstice"},
-  {longitude:180,ar:"الاعتدال الخريفي",en:"Autumnal Equinox"},
+  {longitude:180,ar:"نُقْطَةُ الِاعْتِدَالِ الْخَرِيفِيِّ",en:"Autumnal Equinox · West"},
   {longitude:270,ar:"الانقلاب الشتوي",en:"December Solstice"},
 ] as const;
 const GREAT=LAYERS.filter(l=>l.group==="great").slice(0,10);
@@ -387,7 +387,10 @@ function Sphere({geometry,sky,lite,zenith,nadir,directions,seasons,marks,texts,p
       const p=sky.eclToLocal(s.longitude);
       return <group key={s.longitude}>
         <mesh raycast={()=>null} position={p}><sphereGeometry args={[0.018,12,12]}/><meshBasicMaterial color="#ffb883"/></mesh>
-        <Tag p={p.clone().multiplyScalar(1.17)} ar={s.ar} en={s.en} view={view} showSphere={showSphere} color="#ffcb93"/>
+        <Tag p={s.longitude===0||s.longitude===180
+          ?p.clone().multiplyScalar(1.12).add(new THREE.Vector3(0,0.22,0))
+          :p.clone().multiplyScalar(1.17)}
+          ar={s.ar} en={s.en} view={view} showSphere={showSphere} color="#ffcb93"/>
       </group>;
     })}
     {texts.map(item=><ClassroomTextMesh key={item.id} annotation={item}/>)}
@@ -657,7 +660,7 @@ export function ClassroomApp(){
     }
   };
   // Shared by the scene and Join tool: compute only visible geometry once.
-  const classroomSky=useMemo(()=>computeSky(SKY_DATE,0,75.8),[]);
+  const classroomSky=useMemo(()=>alignEquinoxesEastWest(computeSky(SKY_DATE,0,75.8)),[]);
   const teachingGeometry=useMemo<GeometryEntry[]>(()=>GEOMETRY
     .filter(layer=>visible.includes(layer.id))
     .map(layer=>{
@@ -1187,7 +1190,12 @@ export function ClassroomApp(){
             onClick={()=>setShowNames(x=>!x)}>{showNames?"Hide names":"Show names"}</button>
           <button className="classroom-tiny" onClick={()=>setVisible(GEOMETRY.filter(l=>l.status!=="review"||l.num===9).every(l=>visible.includes(l.id))?[]:GEOMETRY.filter(l=>l.status!=="review"||l.num===9).map(l=>l.id))}>{GEOMETRY.filter(l=>l.status!=="review"||l.num===9).every(l=>visible.includes(l.id))?"Hide all":"Show all"}</button>
         </div></div>
-      <div className="classroom-circle-list"><h3 className="classroom-geometry-subhead">10 Great Circles</h3>{GREAT.map(l=><label key={l.id} className={"classroom-circle-row"+(visible.includes(l.id)?" active":"")}>
+      <div className="classroom-circle-list">
+        <p className="classroom-equinox-note" role="note" dir="auto">
+          نقطتا الاعتدال: Spring = East, Autumn = West.
+          Teaching alignment · all celestial circles, poles and arcs share this frame.
+        </p>
+        <h3 className="classroom-geometry-subhead">10 Great Circles</h3>{GREAT.map(l=><label key={l.id} className={"classroom-circle-row"+(visible.includes(l.id)?" active":"")}>
         <input type="checkbox" checked={visible.includes(l.id)}
           onChange={()=>setVisible(old=>old.includes(l.id)?old.filter(id=>id!==l.id):[...old,l.id])}/>
         <span className="classroom-circle-color" style={{background:l.color}}/>

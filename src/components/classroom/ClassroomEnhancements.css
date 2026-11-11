@@ -190,3 +190,17 @@
   .classroom-root.classroom-v2 .classroom-circle-row,
   .classroom-root.classroom-v2 button { transition: none !important; }
 }
+
+/* Explicitly mark the non-realtime East–West equinoctial teaching frame. */
+.classroom-root.classroom-v2 .classroom-layers .classroom-equinox-note {
+  margin: 0 4px 8px;
+  padding: 9px 10px;
+  border: 1px solid rgba(82,127,180,.28);
+  border-radius: 9px;
+  background: rgba(233,245,255,.94);
+  color: #284768;
+  font-size: 10px;
+  line-height: 1.55;
+  font-weight: 650;
+  flex: 0 0 auto;
+}
