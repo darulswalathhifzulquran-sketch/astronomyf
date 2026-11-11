@@ -4,7 +4,7 @@ import { Html, Line, OrbitControls } from "@react-three/drei";
 import { Link } from "@tanstack/react-router";
 import * as THREE from "three";
 import type { OrbitControls as OrbitImpl } from "three-stdlib";
-import { ArrowLeft, Check, Compass, Eraser, Eye, EyeOff, Maximize2, MousePointer2, Palette, PenLine, RotateCcw, Ruler, Slash, Undo2, X, Shapes, Triangle, DraftingCompass, Redo2, Settings2, Save, FolderOpen, FilePlus2, FileDown, FileUp, Link2, Type, Trash2, Pencil } from "lucide-react";
+import { ArrowLeft, Check, Compass, Eraser, Eye, EyeOff, Maximize2, MousePointer2, Palette, PenLine, RotateCcw, Ruler, Slash, Undo2, X, Shapes, Triangle, DraftingCompass, Redo2, Settings2, Gauge, Save, FolderOpen, FilePlus2, FileDown, FileUp, Link2, Type, Trash2, Pencil } from "lucide-react";
 import { LAYERS, type LayerDef } from "@/data/layers";
 import { buildLayer } from "@/lib/astronomy/layerGeometry";
 import { computeSky } from "@/lib/astronomy/sky";
@@ -358,7 +358,7 @@ function Sphere({geometry,sky,lite,zenith,nadir,directions,seasons,marks,texts,p
   // The invisible sphere is visual-only here; stage handles click raycasting.
   return <>
     <ambientLight intensity={0.9}/>
-    <ClassroomCamera view={view} cmd={cmd} enabled={tool!=="eraser"&&tool!=="join"&&!edit}/>
+    <ClassroomCamera view={view} cmd={cmd} enabled={tool==="orbit"&&!edit}/>
     {showSphere&&view==="outside"&&<mesh renderOrder={-1} raycast={()=>null}>
       <sphereGeometry args={[0.997,72,56]}/><meshBasicMaterial colorWrite={false} depthWrite/>
     </mesh>}
@@ -763,7 +763,11 @@ export function ClassroomApp(){
   };
   const screenMove=(e:ReactPointerEvent<HTMLElement>)=>{
     const p=pixelFromClient(e.clientX,e.clientY);
-    if(tool==="eraser")setEraserCursor(normalizedFromPixel(p));
+    if(tool==="eraser")setEraserCursor(previous=>{
+      const next=normalizedFromPixel(p);
+      return previous&&dist2([previous[0]*stageSize[0],previous[1]*stageSize[1]],p)<5
+        ?previous:next;
+    });
     const g=gesture.current;
     if(!g||g.pointer!==e.pointerId)return;
     const movement=Math.hypot(p[0]-g.startX,p[1]-g.startY);
@@ -1149,6 +1153,17 @@ export function ClassroomApp(){
     <aside className="classroom-tools classroom-glass" aria-label="Whiteboard drawing tools">
       <div className="classroom-panel-head"><div><span className="classroom-overline">YOUR WORKSPACE</span>
         <h2 className="classroom-tool-heading">Teaching tools</h2><p>Sketch · Measure · Explain</p></div><PenLine size={19}/></div>
+      <div className="classroom-tool-section classroom-performance-section">
+        <div className="classroom-section-title"><Gauge size={15}/> Android performance</div>
+        <button className={"classroom-feature-action"+(lite?" on":"")}
+          type="button" aria-pressed={lite} onClick={()=>setLite(value=>!value)}>
+          <Gauge size={16}/> {lite?"Lite mode ON · tap for high detail":"High detail ON · tap for Lite mode"}
+        </button>
+        <p className="classroom-hint">Lite mode reduces GPU pixel density, disables
+          costly antialiasing and extra arc labels. All geometry and drawing tools
+          remain usable. Use Select to rotate the sphere; other tools now capture
+          touches without accidentally rotating it.</p>
+      </div>
       <div className="classroom-tool-section classroom-project-section">
         <div className="classroom-section-title"><Save size={15}/> Classroom projects</div>
         <label className="classroom-project-label">Project name
