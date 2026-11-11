@@ -461,6 +461,15 @@ export function ClassroomApp(){
   const [edit,setEdit]=useState<Edit|null>(null);
   const [marks,setMarks]=useState<Mark[]>([]);
   const [texts,setTexts]=useState<TextAnnotation[]>([]);
+  const [nameTask,setNameTask]=useState<NameTask|null>(null);
+  const [nameDraft,setNameDraft]=useState("");
+  const [selectedLineKey,setSelectedLineKey]=useState("");
+  const nameInputRef=useRef<HTMLInputElement|null>(null);
+  useEffect(()=>{
+    if(nameTask&&typeof window!=="undefined"&&!window.matchMedia("(pointer: coarse)").matches){
+      nameInputRef.current?.focus();
+    }
+  },[nameTask]);
   const [textInput,setTextInput]=useState("السَّمَاءُ");
   const [textSize,setTextSize]=useState(0.18);
   const [joinFrom,setJoinFrom]=useState<JoinEndpoint|null>(null);
@@ -489,8 +498,56 @@ export function ClassroomApp(){
   },[]);
   const gesture=useRef<Gesture|null>(null);
   const nextId=useRef(1);
-  const makeId=()=>String(nextId.current++);
+  const makeId=()=>("draw-"+Date.now().toString(36)+"-"+(nextId.current++).toString(36)+"-"+Math.random().toString(36).slice(2,7));
   const snapshot=useCallback(()=>{setHistory(old=>[...old,{marks,strokes,texts}]);setFuture([]);},[marks,strokes,texts]);
+  /** Drawing is already committed before this optional naming step. */
+  const requestLineNames=useCallback((kind:NameTask["kind"],ids:string[])=>{
+    if(!ids.length)return;
+    setNameDraft("");
+    setNameTask({kind,ids,index:0,editing:false});
+  },[]);
+  const finishLineName=(save:boolean)=>{
+    if(!nameTask)return;
+    const id=nameTask.ids[nameTask.index];
+    const name=cleanLineName(nameDraft);
+    if(id&&save&&name){
+      // Newly drawn lines remain a single Undo action with the optional name.
+      // Renaming an older line is a separate undoable edit.
+      if(nameTask.editing)snapshot();
+      if(nameTask.kind==="mark")
+        setMarks(old=>old.map(line=>line.id===id?{...line,name}:line));
+      else
+        setStrokes(old=>old.map(line=>line.id===id?{...line,name}:line));
+    }
+    if(nameTask.index+1<nameTask.ids.length){
+      setNameTask({...nameTask,index:nameTask.index+1});
+      setNameDraft("");
+      setInfo(save&&name?"Line named. Name the next line or skip.":"Line kept without a name. Next line:");
+    }else{
+      setNameTask(null);setNameDraft("");
+      setInfo(nameTask.editing
+        ?save&&name?"Line name updated.":"Name edit canceled."
+        :save&&name?"Line finished and its name is attached.":"Line finished without a name.");
+    }
+  };
+  const selectedLine=selectedLineKey.startsWith("mark:")
+    ?marks.find(line=>line.id===selectedLineKey.slice(5))
+    :selectedLineKey.startsWith("stroke:")
+      ?strokes.find(line=>line.id===selectedLineKey.slice(7)):undefined;
+  const editSelectedLineName=()=>{
+    if(!selectedLine)return;
+    const kind:NameTask["kind"]=selectedLineKey.startsWith("mark:")?"mark":"stroke";
+    setNameDraft(selectedLine.name??"");
+    setNameTask({kind,ids:[selectedLine.id],index:0,editing:true});
+  };
+  const removeSelectedLineName=()=>{
+    if(!selectedLine?.name)return;
+    snapshot();
+    if(selectedLineKey.startsWith("mark:"))
+      setMarks(old=>old.map(line=>line.id===selectedLine.id?{...line,name:undefined}:line));
+    else setStrokes(old=>old.map(line=>line.id===selectedLine.id?{...line,name:undefined}:line));
+    setInfo("Line name removed. The drawing is preserved.");
+  };
 
   const chooseTool=(next:Tool)=>{
     setTool(next);setPending(null);setPendingScreen(null);setPendingVertices([]);setPendingScreenVertices([]);setDrawing(null);setHollowPenDraft([]);hollowDraftRef.current=[];setEdit(null);setJoinFrom(null);
