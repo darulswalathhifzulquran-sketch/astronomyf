@@ -4,7 +4,7 @@ import { Html, Line, OrbitControls } from "@react-three/drei";
 import { Link } from "@tanstack/react-router";
 import * as THREE from "three";
 import type { OrbitControls as OrbitImpl } from "three-stdlib";
-import { ArrowLeft, Check, Compass, Eraser, Eye, EyeOff, Maximize2, MousePointer2, Palette, PenLine, RotateCcw, Ruler, Slash, Undo2, X, Shapes, Triangle, DraftingCompass, Redo2, Settings2, Gauge, Save, FolderOpen, FilePlus2, FileDown, FileUp, Link2, Type, Trash2, Pencil } from "lucide-react";
+import { ArrowLeft, Check, Compass, Eraser, Eye, EyeOff, Maximize2, MousePointer2, Palette, PenLine, RotateCcw, Ruler, Slash, Undo2, X, Shapes, Triangle, DraftingCompass, Redo2, Settings2, Gauge, Save, FolderOpen, FilePlus2, FileDown, FileUp, Link2, Type, Trash2, Pencil, Crosshair } from "lucide-react";
 import { LAYERS, type LayerDef } from "@/data/layers";
 import { buildLayer } from "@/lib/astronomy/layerGeometry";
 import { computeSky } from "@/lib/astronomy/sky";
@@ -13,6 +13,7 @@ import { ClassroomInstrument, type RulerPose, type AngleDrawing } from "./Classr
 import { ClassroomCompass, type CompassDrawing } from "./ClassroomCompass";
 import { ClassroomTextMesh, type TextAnnotation } from "./ClassroomTextMesh";
 import { newProjectId, readProjects, writeProjects, type SavedProject } from "./projectStorage";
+import { centerAxisPaths, interpolate2, interpolate3, nearestProjectedSegment } from "./joinGeometry";
 import "./Classroom.css";
 import "./ClassroomEnhancements.css";
 
@@ -389,6 +390,11 @@ function Sphere({geometry,sky,lite,zenith,nadir,directions,seasons,marks,texts,p
       </group>;
     })}
     {texts.map(item=><ClassroomTextMesh key={item.id} annotation={item}/>)}
+    {marks.some(mark=>mark.id==="center-axis-horizontal"||mark.id==="center-axis-vertical")&&
+      <mesh position={[0,0,0]} raycast={()=>null}>
+        <sphereGeometry args={[0.026,12,12]}/>
+        <meshBasicMaterial color="#fff2a7" depthTest={false} depthWrite={false}/>
+      </mesh>}
     {marks.map(mark=><MarkLine key={mark.id} mark={mark} view={view} showSphere={showSphere} edit={edit} onBeginEdit={onBeginEdit}/>)}
     {draft.length>1&&<Line points={draft.map(p=>new THREE.Vector3(...p))} color={color}
       lineWidth={3} depthTest={false} depthWrite={false} raycast={()=>null}/>} 
@@ -480,7 +486,7 @@ export function ClassroomApp(){
     setInfo(next==="orbit"?"Drag vertically N–S or horizontally E–W; scroll/pinch to zoom.":
       next==="eraser"?"Click any teacher-drawn line to remove it; drag across a portion to cut it.":
       next==="pen"?"Shape ON: follow ball skin. Inside + Shape OFF: draw hollow 3D segments. Drag along the ruler edge for a perfect straight stroke.":
-      next==="join"?"Join lines: click the end of one drawn line and then the end of another. Works without the sphere.":
+      next==="join"?"Join: tap any position along a line, circle or arc, then another position. The second tap can also be in empty space.":
       next==="text3d"?"Enter your text in the toolbox, then click a location on the globe to place it in 3D.": 
       next==="line"?"Shape ON: ball-surface arc. Inside + Shape OFF: 3D straight chord through the hollow interior. Outside + OFF: flat line.":
       next==="triangle"?"Choose three points. Shape ON draws spherical edges; OFF draws straight triangle sides.":
@@ -663,68 +669,101 @@ export function ClassroomApp(){
     const camera=cameraRef.current;
     if(!camera){setInfo("The 3D scene is still initializing.");return;}
     const [w,h]=stageSize;
-    let best:JoinEndpoint|null=null, nearest=26;
-    for(const mark of marks){
-      if(mark.points.length<2)continue;
-      for(const point of [mark.points[0]!,mark.points[mark.points.length-1]!] as Vec[]){
-        if(mark.surface&&!visiblePoint(point,camera,view,showSphere))continue;
-        const screen=projectPoint(point,camera,w,h);
-        if(!screen)continue;
-        const distance=dist2(screen,pixel);
-        if(distance<nearest){nearest=distance;best={id:mark.id,type:"mark",position:point};}
-      }
-    }
+    const radius=window.matchMedia("(pointer: coarse)").matches?25:19;
+    let best:JoinEndpoint|null=null;
+    let nearest=radius;
+    const test3D=(id:string,points:Vec[],surface:boolean)=>{
+      if(points.length<2)return;
+      // For very long freehand marks, sample only as much geometry as required
+      // for responsive touch hit-testing; the selected point is interpolated.
+      const step=Math.max(1,Math.ceil(points.length/450));
+      const samples=points.filter((_,i)=>i%step===0||i===points.length-1);
+      const projected=samples.map(p=>(!surface||visiblePoint(p,camera,view,showSphere))
+        ?projectPoint(p,camera,w,h):null);
+      const hit=nearestProjectedSegment(projected,pixel,nearest);
+      if(!hit||hit.distance>nearest)return;
+      const a=samples[hit.segmentIndex]!,b=samples[hit.segmentIndex+1]!;
+      nearest=hit.distance;
+      best={id,type:"mark",position:interpolate3(a,b,hit.ratio)};
+    };
+    // Drawn 3D paths: any segment between the endpoints is selectable.
+    for(const mark of marks)test3D(mark.id,mark.points,mark.surface);
+    // Whiteboard SVG paths: choose any part of the actual stroke, not just
+    // its first or last vertex.
     for(const stroke of strokes){
       if(stroke.points.length<2)continue;
-      for(const point of [stroke.points[0]!,stroke.points[stroke.points.length-1]!] as XY[]){
-        const distance=dist2([point[0]*w,point[1]*h],pixel);
-        if(distance<nearest){nearest=distance;best={id:stroke.id,type:"stroke",position:point};}
+      const step=Math.max(1,Math.ceil(stroke.points.length/550));
+      const points=stroke.points.filter((_,i)=>i%step===0||i===stroke.points.length-1);
+      const projected=points.map(point=>[point[0]*w,point[1]*h] as XY);
+      const hit=nearestProjectedSegment(projected,pixel,nearest);
+      if(!hit||hit.distance>nearest)continue;
+      nearest=hit.distance;
+      best={id:stroke.id,type:"stroke",position:interpolate2(
+        points[hit.segmentIndex]!,points[hit.segmentIndex+1]!,hit.ratio)};
+    }
+    // Great/small circles and arcs can be joined at ANY visible point, too.
+    for(const {layer,lines} of teachingGeometry){
+      for(let lineIndex=0;lineIndex<lines.length;lineIndex++){
+        const line=lines[lineIndex]!;
+        const step=Math.max(1,Math.ceil(line.length/220));
+        const points=line.filter((_,i)=>i%step===0||i===line.length-1)
+          .map(p=>t(p.clone().multiplyScalar(1.008)));
+        test3D("geometry:"+layer.id+":"+lineIndex,points,true);
       }
     }
-    // Astronomical circles have no endpoints: select any visible point on a circle/arc.
-    for(const {layer,lines} of teachingGeometry){
-      for(const line of lines){
-        for(let i=1;i<line.length;i++){
-          const a=t(line[i-1]!.clone().multiplyScalar(1.008));
-          const b=t(line[i]!.clone().multiplyScalar(1.008));
-          if(!visiblePoint(a,camera,view,showSphere)||!visiblePoint(b,camera,view,showSphere))continue;
-          const pa=projectPoint(a,camera,w,h),pb=projectPoint(b,camera,w,h);
-          if(!pa||!pb)continue;
-          const dx=pb[0]-pa[0],dy=pb[1]-pa[1],len=dx*dx+dy*dy;
-          const ratio=len>0?Math.max(0,Math.min(1,((pixel[0]-pa[0])*dx+(pixel[1]-pa[1])*dy)/len)):0;
-          const distance=Math.hypot(pixel[0]-pa[0]-ratio*dx,pixel[1]-pa[1]-ratio*dy);
-          if(distance<Math.min(nearest,16)){
-            nearest=distance;
-            best={id:"geometry:"+layer.id,type:"mark",position:t(new THREE.Vector3(...a).lerp(new THREE.Vector3(...b),ratio))};
+    // Once an origin is chosen, allow arbitrary free-space destinations.
+    // On-sphere clicks snap to the sphere; off-sphere clicks land on the
+    // camera-facing plane through the starting 3D point.
+    if(!best&&joinFrom){
+      if(joinFrom.type==="stroke"){
+        best={id:"free:board",type:"stroke",position:normalizedFromPixel(pixel)};
+      }else{
+        const spherePoint=sphereFromPixel(pixel);
+        if(spherePoint){
+          best={id:"free:sphere",type:"mark",position:interpolate3([0,0,0],spherePoint,1.008)};
+        }else{
+          const ray=new THREE.Raycaster();
+          ray.setFromCamera(new THREE.Vector2(pixel[0]/w*2-1,1-pixel[1]/h*2),camera);
+          const plane=new THREE.Plane().setFromNormalAndCoplanarPoint(
+            camera.getWorldDirection(new THREE.Vector3()),new THREE.Vector3(...joinFrom.position));
+          const destination=ray.ray.intersectPlane(plane,new THREE.Vector3());
+          if(destination&&destination.length()<8){
+            best={id:"free:space",type:"mark",position:t(destination)};
           }
         }
       }
     }
-    if(!best){setInfo("Join: click a drawn line endpoint or any visible part of a celestial circle/arc.");return;}
-    if(!joinFrom){setJoinFrom(best);setInfo("First point selected. Click a point on another line, circle, or arc.");return;}
-    if(joinFrom.id===best.id&&joinFrom.type===best.type&&
-       joinFrom.position.every((x,i)=>Math.abs(x-best!.position[i]!)<0.0001)){
-      setInfo("Choose a different point.");return;
+    if(!best){
+      setInfo("Join: first click a point anywhere along a line, arc, or circle.");
+      return;
+    }
+    if(!joinFrom){
+      setJoinFrom(best);
+      setInfo("First point selected. Now tap ANY part of another line or any destination.");
+      return;
+    }
+    if(joinFrom.type===best.type&&joinFrom.position.length===best.position.length&&
+       joinFrom.position.every((x,i)=>Math.abs(x-best!.position[i]!)<0.002)){
+      setInfo("Choose another location, not the same point.");return;
     }
     snapshot();
     if(joinFrom.type==="mark"&&best.type==="mark"){
-      const from=new THREE.Vector3(...joinFrom.position),to=new THREE.Vector3(...best.position);
-      const steps=Math.max(2,Math.ceil(from.distanceTo(to)*130));
-      const points=Array.from({length:steps},(_,i):Vec=>t(from.clone().lerp(to,i/(steps-1))));
-      setMarks(old=>[...old,{id:makeId(),points,color,width,surface:false,inside:false,kind:"line"}]);
-      setInfo("Joined two lines or celestial circles with a free-space 3D segment.");
+      const a=joinFrom.position,b=best.position;
+      // Two 3D points define a straight chord, not a sphere-surface curve.
+      const points:Vec[]=[a,b];
+      setMarks(old=>[...old,{id:makeId(),points,color,width,surface:false,inside:true,kind:"line"}]);
+      setInfo("3D Join completed: connected the two selected positions.");
     }else{
+      // A board-space annotation has no fixed 3D depth. Mixed joins
+      // deliberately remain 2D so endpoints stay exactly under the taps.
       const toScreen=(end:JoinEndpoint):XY=>{
         if(end.type==="stroke")return end.position;
         const p=projectPoint(end.position,camera,w,h);
-        return p?[p[0]/w,p[1]/h]:[0.5,0.5];
+        return p?[p[0]/w,p[1]/h]:normalizedFromPixel(pixel);
       };
       const a=toScreen(joinFrom),b=toScreen(best);
-      const steps=Math.max(2,Math.ceil(dist2([a[0]*w,a[1]*h],[b[0]*w,b[1]*h])/5));
-      const points=Array.from({length:steps},(_,i):XY=>[
-        a[0]+(b[0]-a[0])*i/(steps-1),a[1]+(b[1]-a[1])*i/(steps-1)]);
-      setStrokes(old=>[...old,{id:makeId(),points,color,width}]);
-      setInfo(joinFrom.type===best.type?"Joined two whiteboard line endpoints.":"Joined across 2D/3D as a screen-space line.");
+      setStrokes(old=>[...old,{id:makeId(),points:[a,b],color,width}]);
+      setInfo("Join completed in the whiteboard plane.");
     }
     setJoinFrom(null);
   };
@@ -910,6 +949,23 @@ export function ClassroomApp(){
     ]);
     setInfo("Protractor "+instrument.degrees.toFixed(0)+"° angle added to the board.");
   };
+  const hasCenter=marks.some(mark=>mark.id==="center-axis-horizontal"||mark.id==="center-axis-vertical");
+  const toggleCenter=()=>{
+    snapshot();
+    if(hasCenter){
+      setMarks(old=>old.filter(mark=>mark.id!=="center-axis-horizontal"&&mark.id!=="center-axis-vertical"));
+      setInfo("Center horizontal and vertical 3D lines removed. Undo restores them.");
+    }else{
+      const [horizontal,vertical]=centerAxisPaths();
+      setMarks(old=>[...old,
+        {id:"center-axis-horizontal",points:horizontal,color,width:Math.max(2,width),
+          surface:false,inside:true,kind:"line"},
+        {id:"center-axis-vertical",points:vertical,color,width:Math.max(2,width),
+          surface:false,inside:true,kind:"line"},
+      ]);
+      setInfo("Center added: horizontal E–W and vertical Zenith–Nadir lines intersect at the exact 3D origin (0,0,0).");
+    }
+  };
   const undo=()=>{
     if(edit){setEdit(null);return;}
     if(joinFrom){setJoinFrom(null);return;}
@@ -1088,7 +1144,11 @@ export function ClassroomApp(){
       <ToolButton active={tool==="eraser"} onClick={()=>chooseTool(tool==="eraser"?"orbit":"eraser")} label="Eraser"><Eraser size={22}/>Eraser</ToolButton>
       <ToolButton active={tool==="orbit"} onClick={()=>chooseTool("orbit")} label="Select and rotate sphere"><MousePointer2 size={22}/>Select</ToolButton>
       <ToolButton active={tool==="line"} onClick={()=>chooseTool(tool==="line"?"orbit":"line")} label="Straight line"><Slash size={22}/>Line</ToolButton>
-      <ToolButton active={tool==="join"} onClick={()=>chooseTool(tool==="join"?"orbit":"join")} label="Join existing line endpoints"><Link2 size={22}/>Join</ToolButton>
+      <ToolButton active={tool==="join"} onClick={()=>chooseTool(tool==="join"?"orbit":"join")} label="Join anywhere along any lines or circles"><Link2 size={22}/>Join</ToolButton>
+      <button type="button" className={"classroom-toolbar-icon"+(hasCenter?" is-active":"")}
+        onClick={toggleCenter} aria-pressed={hasCenter} title="Add or remove center horizontal and vertical 3D lines">
+        <Crosshair size={22}/><small>Center</small>
+      </button>
       <ToolButton active={tool==="text3d"} onClick={()=>chooseTool(tool==="text3d"?"orbit":"text3d")} label="Place 3D text"><Type size={22}/>3D Text</ToolButton>
       <ToolButton active={tool==="triangle"} onClick={()=>chooseTool(tool==="triangle"?"orbit":"triangle")} label="Shape triangle"><Triangle size={22}/>Shape</ToolButton>
       <button type="button" className={"classroom-toolbar-icon"+(mobilePanel==="tools"?" is-active":"")}
@@ -1221,9 +1281,18 @@ export function ClassroomApp(){
       <div className="classroom-tool-section classroom-join-section">
         <div className="classroom-section-title"><Link2 size={15}/> Join line to line</div>
         <button className={"classroom-feature-action"+(tool==="join"?" on":"")} type="button"
-          onClick={()=>chooseTool(tool==="join"?"orbit":"join")}><Link2 size={16}/> Join endpoints</button>
-        <p className="classroom-hint">Click an endpoint of any existing line, then a second endpoint.
-          Astronomical circles and 3D lines connect through free space, not along the sphere. Flat ink lines join on the board.</p>
+          onClick={()=>chooseTool(tool==="join"?"orbit":"join")}><Link2 size={16}/> Join anywhere</button>
+        <p className="classroom-hint">Tap any point along a drawn 3D line, a great/small circle, or a qous.
+          Tap anywhere else to finish, including the middle of another line or free space.
+          3D-to-3D joins are straight; 2D whiteboard ink stays on the screen plane.</p>
+        <div className="classroom-section-title"><Crosshair size={15}/> Center axes</div>
+        <button className={"classroom-feature-action"+(hasCenter?" on":"")}
+          type="button" onClick={toggleCenter} aria-pressed={hasCenter}>
+          <Crosshair size={16}/> {hasCenter?"Remove Center lines":"Draw Center horizontal + vertical"}
+        </button>
+        <p className="classroom-hint">One click draws two real lines through the sphere's center:
+          horizontal East–West and vertical Zenith–Nadir. Visible in Inside/Outside views.
+          Join to any point along either line. Save, Undo and Redo work as usual.</p>
       </div>
       <div className="classroom-tool-section classroom-instrument-controls">
         <div className="classroom-section-title"><Ruler size={15}/> Teaching instruments</div>
