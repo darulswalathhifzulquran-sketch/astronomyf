@@ -110,8 +110,8 @@ function buildMoonMaps(): { color: THREE.DataTexture; bump: THREE.DataTexture } 
         const rim = Math.exp(-Math.pow((d - 0.91) * 11, 2)) * 24;
         const change = pit + rim;
         for (let ch = 0; ch < 3; ch++) {
-          color[i + ch] = clamp255(color[i + ch] + change * 0.8);
-          bump[i + ch] = clamp255(bump[i + ch] + change * 2.4);
+          color[i + ch] = clamp255((color[i + ch] ?? 0) + change * 0.8);
+          bump[i + ch] = clamp255((bump[i + ch] ?? 0) + change * 2.4);
         }
       }
     }

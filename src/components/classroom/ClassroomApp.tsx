@@ -4,24 +4,58 @@ import { Html, Line, OrbitControls } from "@react-three/drei";
 import { Link } from "@tanstack/react-router";
 import * as THREE from "three";
 import type { OrbitControls as OrbitImpl } from "three-stdlib";
-import { ArrowLeft, Check, Compass, Eraser, Eye, EyeOff, Maximize2, MousePointer2, Palette, PenLine, RotateCcw, Ruler, Slash, Undo2, X, Shapes, Triangle, DraftingCompass, Redo2, Settings2 } from "lucide-react";
+import { ArrowLeft, Check, Compass, Eraser, Eye, EyeOff, Maximize2, MousePointer2, Palette, PenLine, RotateCcw, Ruler, Slash, Undo2, X, Shapes, Triangle, DraftingCompass, Redo2, Settings2, Save, FolderOpen, FilePlus2, FileDown, FileUp, Link2, Type, Trash2, Pencil } from "lucide-react";
 import { LAYERS, type LayerDef } from "@/data/layers";
 import { buildLayer } from "@/lib/astronomy/layerGeometry";
 import { computeSky } from "@/lib/astronomy/sky";
 import { greatCircle, planeNormal, slerpArc, V } from "@/lib/astronomy/math";
 import { ClassroomInstrument, type RulerPose, type AngleDrawing } from "./ClassroomInstruments";
 import { ClassroomCompass, type CompassDrawing } from "./ClassroomCompass";
+import { ClassroomTextMesh, type TextAnnotation } from "./ClassroomTextMesh";
+import { newProjectId, readProjects, writeProjects, type SavedProject } from "./projectStorage";
 import "./Classroom.css";
+import "./ClassroomEnhancements.css";
 
 type Vec = [number,number,number];
 type XY = [number,number];
-type Tool = "orbit" | "pen" | "line" | "ruler" | "eraser" | "triangle" | "protractor";
+type Tool = "orbit" | "pen" | "line" | "ruler" | "eraser" | "triangle" | "protractor" | "join" | "text3d";
 type Place = "inside" | "outside";
 type View = "outside" | "inside";
-type Mark = {id:string;points:Vec[];color:string;width:number;surface:boolean;inside:boolean;measure?:string;anchorA?:Vec;anchorB?:Vec;kind?:"pen"|"line"|"ruler"};
+type Mark = {id:string;points:Vec[];color:string;width:number;surface:boolean;inside:boolean;measure?:string|undefined;anchorA?:Vec|undefined;anchorB?:Vec|undefined;kind?:"pen"|"line"|"ruler"};
 type Stroke = {id:string;points:XY[];color:string;width:number;measure?:{x:number;y:number;label:string}};
-type Snapshot = {marks:Mark[];strokes:Stroke[]};
-type Gesture = {pointer:number;kind:"screen"|"erase"|"free-line"|"edit"|"sphere"|"free-multi"|"hollow-pen";x:number;y:number;startX:number;startY:number;dragged:boolean;guide:boolean};
+type Snapshot = {marks:Mark[];strokes:Stroke[];texts:TextAnnotation[]};
+type JoinEndpoint = {id:string;type:"mark";position:Vec} | {id:string;type:"stroke";position:XY};
+type ProjectData = {
+  visible:string[]; zenith:boolean; nadir:boolean; directions:boolean; seasons:number[];
+  showSphere:boolean; showNames:boolean; view:View; shape:boolean; placement:Place;
+  color:string; width:number; marks:Mark[]; strokes:Stroke[]; texts:TextAnnotation[];
+};
+function validProjectData(value:unknown):value is ProjectData {
+  if(!value||typeof value!=="object")return false;
+  const p=value as ProjectData;
+  const coord=(a:unknown,n:number):boolean=>Array.isArray(a)&&a.length===n&&a.every(v=>typeof v==="number"&&Number.isFinite(v)&&Math.abs(v)<1000);
+  return Array.isArray(p.visible)&&p.visible.length<=30&&p.visible.every(id=>typeof id==="string"&&LAYERS.some(l=>l.id===id))&&
+    ["zenith","nadir","directions","showSphere","showNames","shape"].every(key=>typeof p[key as keyof ProjectData]==="boolean")&&
+    Array.isArray(p.seasons)&&p.seasons.length<=4&&p.seasons.every(x=>typeof x==="number")&&
+    (p.view==="inside"||p.view==="outside")&&(p.placement==="inside"||p.placement==="outside")&&
+    typeof p.color==="string"&&/^#[0-9a-fA-F]{6}$/.test(p.color)&&
+    typeof p.width==="number"&&p.width>=1&&p.width<=9&&
+    Array.isArray(p.marks)&&p.marks.length<1000&&p.marks.every(m=>!!m&&typeof m.id==="string"&&
+      typeof m.color==="string"&&/^#[0-9a-fA-F]{6}$/.test(m.color)&&
+      typeof m.width==="number"&&m.width>=1&&m.width<=9&&
+      typeof m.surface==="boolean"&&typeof m.inside==="boolean"&&
+      Array.isArray(m.points)&&m.points.length>=2&&m.points.length<2000&&m.points.every(v=>coord(v,3))&&
+      (!m.anchorA||coord(m.anchorA,3))&&(!m.anchorB||coord(m.anchorB,3)))&&
+    Array.isArray(p.strokes)&&p.strokes.length<1000&&p.strokes.every(m=>!!m&&typeof m.id==="string"&&
+      typeof m.color==="string"&&/^#[0-9a-fA-F]{6}$/.test(m.color)&&
+      typeof m.width==="number"&&m.width>=1&&m.width<=9&&
+      Array.isArray(m.points)&&m.points.length>=2&&m.points.length<8000&&m.points.every(v=>coord(v,2)))&&
+    Array.isArray(p.texts)&&p.texts.length<200&&p.texts.every(x=>!!x&&typeof x.id==="string"&&
+      typeof x.value==="string"&&x.value.length<=100&&typeof x.color==="string"&&
+      /^#[0-9a-fA-F]{6}$/.test(x.color)&&typeof x.size==="number"&&x.size>=0.07&&x.size<=0.5&&
+      typeof x.inside==="boolean"&&coord(x.position,3));
+}
+type Gesture = {pointer:number;kind:"screen"|"erase"|"free-line"|"edit"|"sphere"|"free-multi"|"hollow-pen"|"join";x:number;y:number;startX:number;startY:number;dragged:boolean;guide:boolean};
 type Edit = {id:string;endpoint:0|1};
 type CameraCmd = {number:number;dir:Vec};
 const SEASONS = [
@@ -31,6 +65,9 @@ const SEASONS = [
   {longitude:270,ar:"الانقلاب الشتوي",en:"December Solstice"},
 ] as const;
 const GREAT=LAYERS.filter(l=>l.group==="great").slice(0,10);
+const SMALL=LAYERS.filter(l=>l.group==="small");
+const ARCS=LAYERS.filter(l=>l.group==="arc");
+const GEOMETRY=[...GREAT,...SMALL,...ARCS];
 const DEFAULT_VISIBLE=GREAT.filter(l=>[1,2,6,7].includes(l.num)).map(l=>l.id);
 const PALETTE=["#e8ecf5","#fb6379","#51a1ff","#3fe0aa","#c795ff","#ffd06a"];
 const SKY_DATE=new Date("2026-03-20T12:00:00Z");
@@ -91,7 +128,7 @@ function markHit(mark:Mark,p:XY,camera:THREE.Camera,w:number,h:number,view:View,
 function inkHit(stroke:Stroke,p:XY,w:number,h:number) {
   let best=Infinity;
   for(let i=1;i<stroke.points.length;i++){
-    const a=stroke.points[i-1],b=stroke.points[i];
+    const a=stroke.points[i-1]!,b=stroke.points[i]!;
     best=Math.min(best,screenDistance(p,[a[0]*w,a[1]*h],[b[0]*w,b[1]*h]));
   }
   return best;
@@ -284,23 +321,23 @@ function MarkLine({mark,view,showSphere,edit,onBeginEdit}:{mark:Mark;view:View;s
     })}
   </group>;
 }
-function Sphere({visible,zenith,nadir,directions,seasons,marks,pending,tool,color,view,cmd,showSphere,showNames,edit,draft,onPoint,onBeginEdit}:{
+function Sphere({visible,zenith,nadir,directions,seasons,marks,texts,pending,tool,color,view,cmd,showSphere,showNames,edit,draft,onPoint,onBeginEdit}:{
  visible:string[];zenith:boolean;nadir:boolean;directions:boolean;seasons:number[];
- marks:Mark[];pending:Vec|null;tool:Tool;color:string;view:View;cmd:CameraCmd;showSphere:boolean;showNames:boolean;
+ marks:Mark[];texts:TextAnnotation[];pending:Vec|null;tool:Tool;color:string;view:View;cmd:CameraCmd;showSphere:boolean;showNames:boolean;
  edit:Edit|null;draft:Vec[];onPoint:(p:Vec)=>void;onBeginEdit:(id:string,endpoint:0|1)=>void;
 }){
   const sky=useMemo(()=>computeSky(SKY_DATE,0,75.8),[]);
-  const great=useMemo(()=>GREAT.map(layer=>{
+  const geometry=useMemo(()=>GEOMETRY.map(layer=>{
     const geom=buildLayer(layer.id,sky);
-    // Circle 9 remains a teaching schematic pending textual verification.
+    // Circle 9 remains explicitly schematic pending primary-source verification.
     const lines=geom.lines.length?geom.lines:layer.num===9?[greatCircle(planeNormal(sky.K,V(0,1,0)))]:[];
-    return {layer,lines};
+    return {layer,lines,label:geom.label};
   }),[sky]);
   // All tool positions are resolved once from stage-relative pointer coordinates.
   // The invisible sphere is visual-only here; stage handles click raycasting.
   return <>
     <ambientLight intensity={0.9}/>
-    <ClassroomCamera view={view} cmd={cmd} enabled={tool!=="eraser"&&!edit}/>
+    <ClassroomCamera view={view} cmd={cmd} enabled={tool!=="eraser"&&tool!=="join"&&!edit}/>
     {showSphere&&view==="outside"&&<mesh renderOrder={-1} raycast={()=>null}>
       <sphereGeometry args={[0.997,72,56]}/><meshBasicMaterial colorWrite={false} depthWrite/>
     </mesh>}
@@ -315,11 +352,14 @@ function Sphere({visible,zenith,nadir,directions,seasons,marks,pending,tool,colo
       <mesh scale={1.001} raycast={()=>null}><sphereGeometry args={[1,32,24]}/>
         <meshBasicMaterial side={THREE.DoubleSide} color="#80a7cf" wireframe transparent opacity={0.07} depthWrite={false}/></mesh>
     </>}
-    {great.filter(({layer})=>visible.includes(layer.id)).map(({layer,lines})=><group key={layer.id}>
+    {geometry.filter(({layer})=>visible.includes(layer.id)).map(({layer,lines,label})=><group key={layer.id}>
       {lines.map((pts,i)=><Line key={i} points={pts.map(p=>p.clone().multiplyScalar(1.008))}
         color={layer.color} lineWidth={layer.num<=2?3.2:2.2}
         transparent opacity={0.98} depthTest={showSphere&&view==="outside"} depthWrite={false} raycast={()=>null}/>)}
-      {showNames&&<CircleName layer={layer} lines={lines} index={layer.num-1} view={view}/>}
+      {showNames&&lines.length>0&&(layer.group==="great"
+         ?<CircleName layer={layer} lines={lines} index={layer.num-1} view={view}/>
+         :label&&<Tag p={label.clone().normalize().multiplyScalar(1.12)} ar={layer.ar} en={layer.en}
+           color={layer.color} view={view} showSphere={showSphere}/>)}
     </group>)}
     {directions&&([
       [V(0,0,-1.16),"N","North"],[V(0,0,1.16),"S","South"],
@@ -334,6 +374,7 @@ function Sphere({visible,zenith,nadir,directions,seasons,marks,pending,tool,colo
         <Tag p={p.clone().multiplyScalar(1.17)} ar={s.ar} en={s.en} view={view} showSphere={showSphere} color="#ffcb93"/>
       </group>;
     })}
+    {texts.map(item=><ClassroomTextMesh key={item.id} annotation={item}/>)}
     {marks.map(mark=><MarkLine key={mark.id} mark={mark} view={view} showSphere={showSphere} edit={edit} onBeginEdit={onBeginEdit}/>)}
     {draft.length>1&&<Line points={draft.map(p=>new THREE.Vector3(...p))} color={color}
       lineWidth={3} depthTest={false} depthWrite={false} raycast={()=>null}/>} 
@@ -385,6 +426,16 @@ export function ClassroomApp(){
   const [stageSize,setStageSize]=useState<XY>([1000,700]);
   const [edit,setEdit]=useState<Edit|null>(null);
   const [marks,setMarks]=useState<Mark[]>([]);
+  const [texts,setTexts]=useState<TextAnnotation[]>([]);
+  const [textInput,setTextInput]=useState("السَّمَاءُ");
+  const [textSize,setTextSize]=useState(0.18);
+  const [joinFrom,setJoinFrom]=useState<JoinEndpoint|null>(null);
+  const [savedProjects,setSavedProjects]=useState<SavedProject<ProjectData>[]>([]);
+  const [activeProjectId,setActiveProjectId]=useState<string|null>(null);
+  const [selectedProjectId,setSelectedProjectId]=useState("");
+  const [projectName,setProjectName]=useState("Untitled Classroom");
+  const importRef=useRef<HTMLInputElement|null>(null);
+  useEffect(()=>{setSavedProjects(readProjects<ProjectData>());},[]);
   const [strokes,setStrokes]=useState<Stroke[]>([]);
   const [drawing,setDrawing]=useState<Stroke|null>(null);
   const [history,setHistory]=useState<Snapshot[]>([]);
@@ -405,13 +456,15 @@ export function ClassroomApp(){
   const gesture=useRef<Gesture|null>(null);
   const nextId=useRef(1);
   const makeId=()=>String(nextId.current++);
-  const snapshot=useCallback(()=>{setHistory(old=>[...old,{marks,strokes}]);setFuture([]);},[marks,strokes]);
+  const snapshot=useCallback(()=>{setHistory(old=>[...old,{marks,strokes,texts}]);setFuture([]);},[marks,strokes,texts]);
 
   const chooseTool=(next:Tool)=>{
-    setTool(next);setPending(null);setPendingScreen(null);setPendingVertices([]);setPendingScreenVertices([]);setDrawing(null);setHollowPenDraft([]);hollowDraftRef.current=[];setEdit(null);
+    setTool(next);setPending(null);setPendingScreen(null);setPendingVertices([]);setPendingScreenVertices([]);setDrawing(null);setHollowPenDraft([]);hollowDraftRef.current=[];setEdit(null);setJoinFrom(null);
     setInfo(next==="orbit"?"Drag vertically N–S or horizontally E–W; scroll/pinch to zoom.":
       next==="eraser"?"Click any teacher-drawn line to remove it; drag across a portion to cut it.":
       next==="pen"?"Shape ON: follow ball skin. Inside + Shape OFF: draw hollow 3D segments. Drag along the ruler edge for a perfect straight stroke.":
+      next==="join"?"Join lines: click the end of one drawn line and then the end of another. Works without the sphere.":
+      next==="text3d"?"Enter your text in the toolbox, then click a location on the globe to place it in 3D.": 
       next==="line"?"Shape ON: ball-surface arc. Inside + Shape OFF: 3D straight chord through the hollow interior. Outside + OFF: flat line.":
       next==="triangle"?"Choose three points. Shape ON draws spherical edges; OFF draws straight triangle sides.":
       next==="protractor"?"Choose vertex, first arm, second arm to measure the angle.":
@@ -436,7 +489,15 @@ export function ClassroomApp(){
   },[]);
   const onPoint=useCallback((point:Vec)=>{
     if(edit){snapshot();moveEndpoint(edit,point);setEdit(null);setInfo("Endpoint moved. Undo restores the previous position.");return;}
-    if(tool==="orbit"||tool==="eraser")return;
+    if(tool==="orbit"||tool==="eraser"||tool==="join")return;
+    if(tool==="text3d"){
+      const value=textInput.trim().slice(0,100);
+      if(!value){setInfo("Enter the label text first.");return;}
+      snapshot();
+      setTexts(old=>[...old,{id:makeId(),value,position:t(v(point)),inside:view==="inside",color,size:textSize}]);
+      setInfo("3D text placed. Edit or delete it in the toolbox.");
+      return;
+    }
     if(!shape&&view==="inside"&&tool==="line"){
       if(!pending){setPending(point);setInfo("First internal endpoint selected. Choose the other endpoint.");return;}
       if(angle(pending,point)<.006)return;
@@ -487,7 +548,7 @@ export function ClassroomApp(){
       setPending(null);
       setInfo("Line follows the ball skin. Double-click a handle to adjust it.");
     }
-  },[edit,tool,shape,pending,pendingVertices,view,color,width,snapshot,moveEndpoint]);
+  },[edit,tool,shape,pending,pendingVertices,view,color,width,snapshot,moveEndpoint,textInput,textSize]);
 
   // All pointer positions are relative to the SAME classroom stage, in CSS pixels.
   // Camera raycasting, SVG ink, hit-testing and eraser visuals share this frame.
@@ -571,6 +632,84 @@ export function ClassroomApp(){
       setInfo(tool==="triangle"?"Straight triangle completed.":"Measured angle: "+planarAngle(b,a,c).toFixed(1)+"°");
     }
   };
+  const teachingGeometry=useMemo(()=>{
+    const sky=computeSky(SKY_DATE,0,75.8);
+    return GEOMETRY.map(layer=>{
+      const geometry=buildLayer(layer.id,sky);
+      const lines=geometry.lines.length?geometry.lines:layer.num===9?[greatCircle(planeNormal(sky.K,V(0,1,0)))]:[];
+      return {layer,lines};
+    });
+  },[]);
+  const joinAt=(pixel:XY)=>{
+    const camera=cameraRef.current;
+    if(!camera){setInfo("The 3D scene is still initializing.");return;}
+    const [w,h]=stageSize;
+    let best:JoinEndpoint|null=null, nearest=26;
+    for(const mark of marks){
+      if(mark.points.length<2)continue;
+      for(const point of [mark.points[0]!,mark.points[mark.points.length-1]!] as Vec[]){
+        if(mark.surface&&!visiblePoint(point,camera,view,showSphere))continue;
+        const screen=projectPoint(point,camera,w,h);
+        if(!screen)continue;
+        const distance=dist2(screen,pixel);
+        if(distance<nearest){nearest=distance;best={id:mark.id,type:"mark",position:point};}
+      }
+    }
+    for(const stroke of strokes){
+      if(stroke.points.length<2)continue;
+      for(const point of [stroke.points[0]!,stroke.points[stroke.points.length-1]!] as XY[]){
+        const distance=dist2([point[0]*w,point[1]*h],pixel);
+        if(distance<nearest){nearest=distance;best={id:stroke.id,type:"stroke",position:point};}
+      }
+    }
+    // Astronomical circles have no endpoints: select any visible point on a circle/arc.
+    for(const {layer,lines} of teachingGeometry){
+      if(!visible.includes(layer.id))continue;
+      for(const line of lines){
+        for(let i=1;i<line.length;i++){
+          const a=t(line[i-1]!.clone().multiplyScalar(1.008));
+          const b=t(line[i]!.clone().multiplyScalar(1.008));
+          if(!visiblePoint(a,camera,view,showSphere)||!visiblePoint(b,camera,view,showSphere))continue;
+          const pa=projectPoint(a,camera,w,h),pb=projectPoint(b,camera,w,h);
+          if(!pa||!pb)continue;
+          const dx=pb[0]-pa[0],dy=pb[1]-pa[1],len=dx*dx+dy*dy;
+          const ratio=len>0?Math.max(0,Math.min(1,((pixel[0]-pa[0])*dx+(pixel[1]-pa[1])*dy)/len)):0;
+          const distance=Math.hypot(pixel[0]-pa[0]-ratio*dx,pixel[1]-pa[1]-ratio*dy);
+          if(distance<Math.min(nearest,16)){
+            nearest=distance;
+            best={id:"geometry:"+layer.id,type:"mark",position:t(new THREE.Vector3(...a).lerp(new THREE.Vector3(...b),ratio))};
+          }
+        }
+      }
+    }
+    if(!best){setInfo("Join: click a drawn line endpoint or any visible part of a celestial circle/arc.");return;}
+    if(!joinFrom){setJoinFrom(best);setInfo("First point selected. Click a point on another line, circle, or arc.");return;}
+    if(joinFrom.id===best.id&&joinFrom.type===best.type&&
+       joinFrom.position.every((x,i)=>Math.abs(x-best!.position[i]!)<0.0001)){
+      setInfo("Choose a different point.");return;
+    }
+    snapshot();
+    if(joinFrom.type==="mark"&&best.type==="mark"){
+      const from=new THREE.Vector3(...joinFrom.position),to=new THREE.Vector3(...best.position);
+      const steps=Math.max(2,Math.ceil(from.distanceTo(to)*130));
+      const points=Array.from({length:steps},(_,i):Vec=>t(from.clone().lerp(to,i/(steps-1))));
+      setMarks(old=>[...old,{id:makeId(),points,color,width,surface:false,inside:false,kind:"line"}]);
+      setInfo("Joined two lines or celestial circles with a free-space 3D segment.");
+    }else{
+      const toScreen=(end:JoinEndpoint):XY=>{
+        if(end.type==="stroke")return end.position;
+        const p=projectPoint(end.position,camera,w,h);
+        return p?[p[0]/w,p[1]/h]:[0.5,0.5];
+      };
+      const a=toScreen(joinFrom),b=toScreen(best);
+      const steps=Math.max(2,Math.ceil(dist2([a[0]*w,a[1]*h],[b[0]*w,b[1]*h])/5));
+      const points=Array.from({length:steps},(_,i):XY=>[
+        a[0]+(b[0]-a[0])*i/(steps-1),a[1]+(b[1]-a[1])*i/(steps-1)]);
+      setStrokes(old=>[...old,{id:makeId(),points,color,width}]);
+      setInfo(joinFrom.type===best.type?"Joined two whiteboard line endpoints.":"Joined across 2D/3D as a screen-space line.");
+    }
+    setJoinFrom(null);
+  };
   const screenDown=(e:ReactPointerEvent<HTMLElement>)=>{
     if((e.target as Element).closest(".classroom-instrument"))return;
     if(!e.isPrimary){gesture.current=null;return;}
@@ -578,7 +717,9 @@ export function ClassroomApp(){
     const p=pixelFromClient(e.clientX,e.clientY);
     const snap=(tool==="pen"||tool==="line")?guided(p):null;
     const useRuler=Boolean(snap);
-    const kind:Gesture["kind"]|null=edit?"edit":
+    const kind:Gesture["kind"]|null=tool==="join"?"join":
+      tool==="text3d"?"sphere":
+      edit?"edit":
       tool==="eraser"?"erase":
       tool==="pen"&&useRuler?"screen":
       tool==="line"&&(useRuler||pendingScreen)?"free-line":
@@ -667,7 +808,9 @@ export function ClassroomApp(){
       return;
     }
     e.stopPropagation();
-    if(g.kind==="hollow-pen"){
+    if(g.kind==="join"){
+      if(!g.dragged)joinAt(p);
+    }else if(g.kind==="hollow-pen"){
       const points=hollowDraftRef.current;
       if(points.length>1)setMarks(old=>[...old,{id:makeId(),points,color,width,surface:false,inside:true,kind:"pen"}]);
       hollowDraftRef.current=[];
@@ -693,7 +836,7 @@ export function ClassroomApp(){
     if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);
   };
   const screenDoubleClick=(e:ReactMouseEvent<HTMLElement>)=>{
-    if(!cameraRef.current||tool==="eraser")return;
+    if(!cameraRef.current||tool==="eraser"||tool==="join")return;
     const p=pixelFromClient(e.clientX,e.clientY);
     let best:{id:string;index:0|1;distance:number}|null=null;
     for(const mark of marks){
@@ -747,21 +890,22 @@ export function ClassroomApp(){
   };
   const undo=()=>{
     if(edit){setEdit(null);return;}
+    if(joinFrom){setJoinFrom(null);return;}
     if(pending||pendingScreen||pendingVertices.length||pendingScreenVertices.length){
       setPending(null);setPendingScreen(null);setPendingVertices([]);setPendingScreenVertices([]);return;
     }
     const previous=history[history.length-1];
     if(!previous)return;
-    setFuture(old=>[...old,{marks,strokes}]);
-    setMarks(previous.marks);setStrokes(previous.strokes);
+    setFuture(old=>[...old,{marks,strokes,texts}]);
+    setMarks(previous.marks);setStrokes(previous.strokes);setTexts(previous.texts);
     setHistory(old=>old.slice(0,-1));
     setInfo("Undo successful.");
   };
   const redo=()=>{
     if(!future.length)return;
     const next=future[future.length-1]!;
-    setHistory(old=>[...old,{marks,strokes}]);
-    setMarks(next.marks);setStrokes(next.strokes);
+    setHistory(old=>[...old,{marks,strokes,texts}]);
+    setMarks(next.marks);setStrokes(next.strokes);setTexts(next.texts);
     setFuture(old=>old.slice(0,-1));
     setInfo("Redo successful.");
   };
@@ -773,11 +917,101 @@ export function ClassroomApp(){
     setInfo("Compass circle / arc drawn accurately on the whiteboard.");
   };
   const clear=()=>{
-    if(!marks.length&&!strokes.length&&!pending&&!pendingScreen&&!pendingVertices.length&&!pendingScreenVertices.length)return;
+    if(!marks.length&&!strokes.length&&!texts.length&&!pending&&!pendingScreen&&!pendingVertices.length&&!pendingScreenVertices.length)return;
     if(!window.confirm("Clear all classroom drawings?"))return;
-    snapshot();setMarks([]);setStrokes([]);setPending(null);setPendingScreen(null);setPendingVertices([]);setPendingScreenVertices([]);setDrawing(null);setEdit(null);
+    snapshot();setMarks([]);setStrokes([]);setTexts([]);setJoinFrom(null);setPending(null);setPendingScreen(null);setPendingVertices([]);setPendingScreenVertices([]);setDrawing(null);setEdit(null);
     setInfo("Teacher drawings cleared; the original astronomical circles remain.");
   };
+
+  const captureProject=():ProjectData=>({visible,zenith,nadir,directions,seasons,showSphere,showNames,
+    view,shape,placement,color,width,marks,strokes,texts});
+  const applyProject=(data:ProjectData)=>{
+    setVisible(data.visible);setZenith(data.zenith);setNadir(data.nadir);setDirections(data.directions);
+    setSeasons(data.seasons);setShowSphere(data.showSphere);setShowNames(data.showNames);
+    setView(data.view);setShape(data.shape);setPlacement(data.placement);
+    setColor(data.color);setHexDraft(data.color);setWidth(data.width);
+    setMarks(data.marks);setStrokes(data.strokes);setTexts(data.texts);
+    setHistory([]);setFuture([]);chooseTool("orbit");
+    setCmd(old=>({number:old.number+1,dir:[0,0,1]}));
+  };
+  const saveProject=(asNew=false)=>{
+    const name=projectName.trim().slice(0,80)||"Untitled Classroom";
+    const id=(!asNew&&activeProjectId)||newProjectId();
+    const entry:SavedProject<ProjectData>={id,version:1,name,updatedAt:new Date().toISOString(),data:captureProject()};
+    const next=[entry,...savedProjects.filter(p=>p.id!==id)];
+    if(!writeProjects(next)){setInfo("Save failed: browser storage is full or disabled. Export a JSON backup.");return;}
+    setSavedProjects(next);setActiveProjectId(id);setSelectedProjectId(id);setProjectName(name);
+    setInfo(asNew?"Saved as a separate classroom project.":"Classroom project saved in this browser.");
+  };
+  const openProject=()=>{
+    const entry=savedProjects.find(p=>p.id===selectedProjectId);
+    if(!entry){setInfo("Select a saved project first.");return;}
+    if(!validProjectData(entry.data)){setInfo("Cannot open: invalid or outdated project data.");return;}
+    if(!window.confirm("Open '"+entry.name+"'? Unsaved workspace changes will be lost."))return;
+    applyProject(entry.data);setActiveProjectId(entry.id);setProjectName(entry.name);
+    setInfo("Opened '"+entry.name+"'. You can continue editing and Save again.");
+  };
+  const renameProject=()=>{
+    const entry=savedProjects.find(p=>p.id===selectedProjectId);
+    if(!entry){setInfo("Select a project to rename.");return;}
+    const answer=window.prompt("Rename saved project",entry.name);
+    if(answer===null)return;
+    const name=answer.trim().slice(0,80);
+    if(!name){setInfo("Project name cannot be empty.");return;}
+    const next=savedProjects.map(p=>p.id===entry.id?{...p,name,updatedAt:new Date().toISOString()}:p);
+    if(!writeProjects(next)){setInfo("Rename failed: browser storage unavailable.");return;}
+    setSavedProjects(next);if(activeProjectId===entry.id)setProjectName(name);
+    setInfo("Saved project renamed.");
+  };
+  const deleteProject=()=>{
+    const entry=savedProjects.find(p=>p.id===selectedProjectId);
+    if(!entry)return;
+    if(!window.confirm("Delete saved project '"+entry.name+"' from this browser? Export it first if needed."))return;
+    const next=savedProjects.filter(p=>p.id!==entry.id);
+    if(!writeProjects(next)){setInfo("Delete failed: browser storage unavailable.");return;}
+    setSavedProjects(next);setSelectedProjectId("");
+    if(activeProjectId===entry.id)setActiveProjectId(null);
+    setInfo("Saved project deleted. Current whiteboard remains open.");
+  };
+  const exportProject=()=>{
+    const name=projectName.trim().slice(0,80)||"Untitled Classroom";
+    const data:SavedProject<ProjectData>={version:1,id:activeProjectId||newProjectId(),name,
+      updatedAt:new Date().toISOString(),data:captureProject()};
+    const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+    const url=URL.createObjectURL(blob),anchor=document.createElement("a");
+    anchor.href=url;anchor.download=(name.replace(/[^a-z0-9_-]+/gi,"-")||"classroom")+".json";
+    document.body.appendChild(anchor);anchor.click();anchor.remove();
+    window.setTimeout(()=>URL.revokeObjectURL(url),1000);
+    setInfo("Exported an editable classroom JSON backup.");
+  };
+  const importProject=async(file:File)=>{
+    try{
+      if(file.size>2_000_000)throw new Error("Project file exceeds 2 MB.");
+      const parsed:unknown=JSON.parse(await file.text());
+      if(!parsed||typeof parsed!=="object")throw new Error("Invalid project JSON.");
+      const item=parsed as Partial<SavedProject<unknown>>;
+      if(item.version!==1||!validProjectData(item.data))throw new Error("Unsupported or invalid project format.");
+      const name=typeof item.name==="string"?(item.name.trim().slice(0,80)||"Imported Classroom"):"Imported Classroom";
+      const entry:SavedProject<ProjectData>={version:1,id:newProjectId(),name,updatedAt:new Date().toISOString(),data:item.data};
+      const next=[entry,...savedProjects];
+      if(!writeProjects(next))throw new Error("Browser storage unavailable. Try exporting existing projects.");
+      applyProject(entry.data);setSavedProjects(next);setActiveProjectId(entry.id);
+      setSelectedProjectId(entry.id);setProjectName(name);setInfo("Imported project and opened it for editing.");
+    }catch(error){setInfo(error instanceof Error?error.message:"Unable to import this project.");}
+  };
+  const newProject=()=>{
+    if(!window.confirm("Start a new classroom? Export or Save any unsaved changes first."))return;
+    setMarks([]);setStrokes([]);setTexts([]);setHistory([]);setFuture([]);
+    setVisible(DEFAULT_VISIBLE);setSeasons(SEASONS.map(x=>x.longitude));
+    setZenith(true);setNadir(true);setDirections(true);setShowSphere(true);setShowNames(true);
+    setShape(true);setPlacement("inside");setView("outside");
+    setCmd(old=>({number:old.number+1,dir:[0,0,1]}));
+    chooseTool("orbit");setActiveProjectId(null);setSelectedProjectId("");
+    setProjectName("Untitled Classroom");setInfo("New classroom project ready.");
+  };
+  const selectedJoinPoint=joinFrom?(joinFrom.type==="stroke"
+    ?[joinFrom.position[0]*stageSize[0],joinFrom.position[1]*stageSize[1]] as XY
+    :cameraRef.current?projectPoint(joinFrom.position,cameraRef.current,stageSize[0],stageSize[1]):null):null;
 
   return <main className="classroom-root classroom-v2" data-panel={mobilePanel} data-view={view} data-shell={showSphere?"shown":"hidden"}>
     <header className="classroom-top classroom-glass">
@@ -798,7 +1032,7 @@ export function ClassroomApp(){
         gl={{alpha:true,antialias:true}} camera={{position:[0,0,3.25],fov:45,near:0.002,far:80}}
         onCreated={({camera})=>{cameraRef.current=camera;}}>
         <Sphere visible={visible} zenith={zenith} nadir={nadir} directions={directions} seasons={seasons}
-          marks={marks} pending={pending} tool={tool} color={color} view={view} cmd={cmd}
+          marks={marks} texts={texts} pending={pending} tool={tool} color={color} view={view} cmd={cmd}
           showSphere={showSphere} showNames={showNames} edit={edit} draft={hollowPenDraft} onPoint={onPoint} onBeginEdit={onBeginEdit}/>
       </Canvas>
       <svg className="classroom-ink-layer" width="100%" height="100%"
@@ -810,6 +1044,8 @@ export function ClassroomApp(){
           {line.measure&&<text x={line.measure.x*stageSize[0]} y={line.measure.y*stageSize[1]-11}
             fill="#fff1ae" fontSize={14} fontWeight="700" textAnchor="middle">{line.measure.label}</text>}
         </g>)}
+        {selectedJoinPoint&&<circle cx={selectedJoinPoint[0]} cy={selectedJoinPoint[1]}
+          r={12} fill="rgba(255,211,96,.3)" stroke="#ffd260" strokeWidth={3}/>}
         {pendingScreen&&<circle cx={pendingScreen[0]*stageSize[0]} cy={pendingScreen[1]*stageSize[1]} r={7}
           stroke={color} strokeWidth={2} fill="none"/>}
         {pendingScreenVertices.map((p,i)=><circle key={i} cx={p[0]*stageSize[0]} cy={p[1]*stageSize[1]}
@@ -827,11 +1063,14 @@ export function ClassroomApp(){
       <ToolButton active={tool==="eraser"} onClick={()=>chooseTool(tool==="eraser"?"orbit":"eraser")} label="Eraser"><Eraser size={22}/>Eraser</ToolButton>
       <ToolButton active={tool==="orbit"} onClick={()=>chooseTool("orbit")} label="Select and rotate sphere"><MousePointer2 size={22}/>Select</ToolButton>
       <ToolButton active={tool==="line"} onClick={()=>chooseTool(tool==="line"?"orbit":"line")} label="Straight line"><Slash size={22}/>Line</ToolButton>
+      <ToolButton active={tool==="join"} onClick={()=>chooseTool(tool==="join"?"orbit":"join")} label="Join existing line endpoints"><Link2 size={22}/>Join</ToolButton>
+      <ToolButton active={tool==="text3d"} onClick={()=>chooseTool(tool==="text3d"?"orbit":"text3d")} label="Place 3D text"><Type size={22}/>3D Text</ToolButton>
       <ToolButton active={tool==="triangle"} onClick={()=>chooseTool(tool==="triangle"?"orbit":"triangle")} label="Shape triangle"><Triangle size={22}/>Shape</ToolButton>
       <button type="button" className={"classroom-toolbar-icon"+(mobilePanel==="tools"?" is-active":"")}
         aria-label="Show or hide tool settings" aria-expanded={mobilePanel==="tools"}
         onClick={()=>setMobilePanel(p=>p==="tools"?"none":"tools")}><Settings2 size={22}/><small>Toolbox</small></button>
-      <button type="button" className="classroom-toolbar-icon" aria-label="Undo" disabled={!history.length&&!pending&&!pendingScreen}
+      <button type="button" className="classroom-toolbar-icon" aria-label="Save classroom project" onClick={()=>saveProject()}><Save size={22}/><small>Save</small></button>
+      <button type="button" className="classroom-toolbar-icon" aria-label="Undo" disabled={!history.length&&!pending&&!pendingScreen&&!joinFrom}
         onClick={undo}><Undo2 size={22}/><small>Undo</small></button>
       <button type="button" className="classroom-toolbar-icon" aria-label="Redo" disabled={!future.length}
         onClick={redo}><Redo2 size={22}/><small>Redo</small></button>
@@ -846,31 +1085,110 @@ export function ClassroomApp(){
         onClick={()=>setCompassVisible(v=>!v)}><Compass size={22}/><small>Compass</small></button>
       <button type="button" className="classroom-toolbar-icon" aria-label="Toggle inside or outside view"
         onClick={()=>{setView(v=>v==="inside"?"outside":"inside");setPending(null);}}><Eye size={22}/><small>{view==="inside"?"Inside":"Outside"}</small></button>
-      {(pending||pendingScreen||pendingVertices.length>0||pendingScreenVertices.length>0)&&
+      {(pending||pendingScreen||joinFrom||pendingVertices.length>0||pendingScreenVertices.length>0)&&
         <button type="button" className="classroom-toolbar-icon classroom-toolbar-cancel" aria-label="Cancel current drawing"
-          onClick={()=>{setPending(null);setPendingScreen(null);setPendingVertices([]);setPendingScreenVertices([]);}}>
+          onClick={()=>{setPending(null);setPendingScreen(null);setJoinFrom(null);setPendingVertices([]);setPendingScreenVertices([]);}}>
           <X size={22}/><small>Cancel</small>
         </button>}
     </nav>
-    <aside className="classroom-layers classroom-glass" aria-label="Great circle controls">
-      <div className="classroom-panel-head"><div><span className="classroom-overline">GEOMETRY</span><h2 dir="rtl">الدَّوَائِرُ الْعِظَامُ</h2><p>10 Great Circles</p></div>
+    <aside className="classroom-layers classroom-glass" aria-label="Celestial circles and arcs controls">
+      <div className="classroom-panel-head"><div><span className="classroom-overline">GEOMETRY</span><h2 dir="rtl">الدَّوَائِرُ الْعِظَامُ وَالْقِسِيُّ</h2><p>10 Great Circles · 3 Small Circles · 17 Arcs</p></div>
         <div className="classroom-name-actions">
           <button className="classroom-tiny" aria-pressed={showNames}
             onClick={()=>setShowNames(x=>!x)}>{showNames?"Hide names":"Show names"}</button>
-          <button className="classroom-tiny" onClick={()=>setVisible(visible.length===GREAT.length?[]:GREAT.map(l=>l.id))}>{visible.length===GREAT.length?"Hide all":"Show all"}</button>
+          <button className="classroom-tiny" onClick={()=>setVisible(GEOMETRY.filter(l=>l.status!=="review"||l.num===9).every(l=>visible.includes(l.id))?[]:GEOMETRY.filter(l=>l.status!=="review"||l.num===9).map(l=>l.id))}>{GEOMETRY.filter(l=>l.status!=="review"||l.num===9).every(l=>visible.includes(l.id))?"Hide all":"Show all"}</button>
         </div></div>
-      <div className="classroom-circle-list">{GREAT.map(l=><label key={l.id} className={"classroom-circle-row"+(visible.includes(l.id)?" active":"")}>
+      <div className="classroom-circle-list"><h3 className="classroom-geometry-subhead">10 Great Circles</h3>{GREAT.map(l=><label key={l.id} className={"classroom-circle-row"+(visible.includes(l.id)?" active":"")}>
         <input type="checkbox" checked={visible.includes(l.id)}
           onChange={()=>setVisible(old=>old.includes(l.id)?old.filter(id=>id!==l.id):[...old,l.id])}/>
         <span className="classroom-circle-color" style={{background:l.color}}/>
         <span className="classroom-circle-label"><strong dir="rtl">{l.ar}</strong><small>{l.en}{l.num===9?" · Schematic":""}</small></span>
         <span className="classroom-circle-check">{visible.includes(l.id)&&<Check size={14}/>}</span>
-      </label>)}</div>
-      <p className="classroom-source-note">Circle 9 is a teaching schematic; its historical definition is under review.</p>
+      </label>)}
+        <h3 className="classroom-geometry-subhead">3 Small Circles · الدَّوَائِرُ الصِّغَارُ</h3>
+        {SMALL.map(l=><label key={l.id} className={"classroom-circle-row"+(visible.includes(l.id)?" active":"")}>
+          <input type="checkbox" checked={visible.includes(l.id)}
+            onChange={()=>setVisible(old=>old.includes(l.id)?old.filter(id=>id!==l.id):[...old,l.id])}/>
+          <span className="classroom-circle-color" style={{background:l.color}}/>
+          <span className="classroom-circle-label"><strong dir="rtl">{l.ar}</strong><small>{l.en}</small></span>
+          <span className="classroom-circle-check">{visible.includes(l.id)&&<Check size={14}/>}</span>
+        </label>)}
+        <h3 className="classroom-geometry-subhead">17 Angular Arcs · الْقِسِيُّ</h3>
+        {ARCS.map(l=><label key={l.id} title={l.status==="review"?l.def:l.en}
+          className={"classroom-circle-row"+(visible.includes(l.id)?" active":"")+(l.status==="review"?" is-unverified":"")}>
+          <input type="checkbox" checked={visible.includes(l.id)} disabled={l.status==="review"}
+            onChange={()=>setVisible(old=>old.includes(l.id)?old.filter(id=>id!==l.id):[...old,l.id])}/>
+          <span className="classroom-circle-color" style={{background:l.color}}/>
+          <span className="classroom-circle-label"><strong dir="rtl">{l.ar}</strong>
+            <small>{l.en}{l.status==="review"?" · Awaiting source verification":""}</small></span>
+          <span className="classroom-circle-check">{visible.includes(l.id)&&<Check size={14}/>}</span>
+        </label>)}</div>
+      <p className="classroom-source-note">Circle 9 is schematic. Arcs needing primary-source verification are listed but cannot yet be enabled.</p>
     </aside>
     <aside className="classroom-tools classroom-glass" aria-label="Whiteboard drawing tools">
       <div className="classroom-panel-head"><div><span className="classroom-overline">YOUR WORKSPACE</span>
         <h2 className="classroom-tool-heading">Teaching tools</h2><p>Sketch · Measure · Explain</p></div><PenLine size={19}/></div>
+      <div className="classroom-tool-section classroom-project-section">
+        <div className="classroom-section-title"><Save size={15}/> Classroom projects</div>
+        <label className="classroom-project-label">Project name
+          <input maxLength={80} value={projectName} onChange={e=>setProjectName(e.target.value)}
+            placeholder="Project name" aria-label="Current classroom project name"/>
+        </label>
+        <div className="classroom-project-actions">
+          <button onClick={newProject}><FilePlus2 size={15}/> New</button>
+          <button onClick={()=>saveProject()}><Save size={15}/> Save</button>
+          <button onClick={()=>saveProject(true)}><FilePlus2 size={15}/> Save as</button>
+        </div>
+        <label className="classroom-project-label">Saved in this browser
+          <select value={selectedProjectId} onChange={e=>setSelectedProjectId(e.target.value)}
+            aria-label="Select saved project">
+            <option value="">Choose a saved project…</option>
+            {savedProjects.map(p=><option key={p.id} value={p.id}>{p.name} · {new Date(p.updatedAt).toLocaleDateString()}</option>)}
+          </select>
+        </label>
+        <div className="classroom-project-actions">
+          <button disabled={!selectedProjectId} onClick={openProject}><FolderOpen size={15}/> Open</button>
+          <button disabled={!selectedProjectId} onClick={renameProject}><Pencil size={15}/> Rename</button>
+          <button disabled={!selectedProjectId} onClick={deleteProject}><Trash2 size={15}/> Delete</button>
+          <button onClick={exportProject}><FileDown size={15}/> Export</button>
+          <button onClick={()=>importRef.current?.click()}><FileUp size={15}/> Import</button>
+          <input ref={importRef} className="classroom-import-file" type="file"
+            accept="application/json,.json" aria-label="Import saved classroom project"
+            onChange={async e=>{const file=e.target.files?.[0];e.target.value="";if(file)await importProject(file);}}/>
+        </div>
+        <p className="classroom-hint">Projects stay in this browser until deleted or browser data is cleared.
+          Export JSON to back up or move a project to another device.</p>
+      </div>
+      <div className="classroom-tool-section classroom-text-section">
+        <div className="classroom-section-title"><Type size={15}/> 3D Text</div>
+        <label className="classroom-project-label">Label (Arabic / English)
+          <input type="text" maxLength={100} value={textInput}
+            onChange={e=>setTextInput(e.target.value)} placeholder="Enter 3D text"/>
+        </label>
+        <label className="classroom-project-label">Text height · {textSize.toFixed(2)}
+          <input type="range" min="0.08" max="0.45" step="0.01" value={textSize}
+            onChange={e=>setTextSize(Number(e.target.value))}/>
+        </label>
+        <button className={"classroom-feature-action"+(tool==="text3d"?" on":"")}
+          type="button" onClick={()=>chooseTool(tool==="text3d"?"orbit":"text3d")}>
+          <Type size={16}/> {tool==="text3d"?"Placing text — click sphere":"Place 3D Text"}
+        </button>
+        <p className="classroom-hint">Text is placed in 3D world space on the visible sphere,
+          and follows the scene as you rotate it. Change ink color before placing.</p>
+        {texts.map(label=><div key={label.id} className="classroom-text-entry">
+          <input maxLength={100} aria-label="Edit existing 3D text" value={label.value}
+            onChange={e=>setTexts(old=>old.map(x=>x.id===label.id?{...x,value:e.target.value}:x))}/>
+          <button type="button" title="Delete 3D text" aria-label="Delete 3D text"
+            onClick={()=>{snapshot();setTexts(old=>old.filter(x=>x.id!==label.id));}}><Trash2 size={15}/></button>
+        </div>)}
+      </div>
+      <div className="classroom-tool-section classroom-join-section">
+        <div className="classroom-section-title"><Link2 size={15}/> Join line to line</div>
+        <button className={"classroom-feature-action"+(tool==="join"?" on":"")} type="button"
+          onClick={()=>chooseTool(tool==="join"?"orbit":"join")}><Link2 size={16}/> Join endpoints</button>
+        <p className="classroom-hint">Click an endpoint of any existing line, then a second endpoint.
+          Astronomical circles and 3D lines connect through free space, not along the sphere. Flat ink lines join on the board.</p>
+      </div>
       <div className="classroom-tool-section classroom-instrument-controls">
         <div className="classroom-section-title"><Ruler size={15}/> Teaching instruments</div>
         <div className="classroom-instrument-options">
@@ -959,10 +1277,10 @@ export function ClassroomApp(){
       </div>
       <div className="classroom-actions">
         <button onClick={undo} disabled={!edit&&!pending&&!pendingScreen&&!pendingVertices.length&&!pendingScreenVertices.length&&!history.length}><Undo2 size={15}/> Undo</button>
-        <button onClick={clear} disabled={!pending&&!pendingScreen&&!pendingVertices.length&&!pendingScreenVertices.length&&marks.length===0&&strokes.length===0}><Eraser size={15}/> Clear</button>
-        <button onClick={()=>{setMarks([]);setStrokes([]);setHistory([]);setFuture([]);setCompassVisible(false);setPending(null);setPendingScreen(null);setPendingVertices([]);setPendingScreenVertices([]);setEdit(null);setShowSphere(true);setShowNames(true);setRulerVisible(false);setProtractorVisible(false);setVisible(DEFAULT_VISIBLE);setSeasons(SEASONS.map(s=>s.longitude));setZenith(true);setNadir(true);setDirections(true);setView("outside");setCmd(old=>({number:old.number+1,dir:[0,0,1]}));setShape(true);chooseTool("orbit");}}><RotateCcw size={15}/> Reset</button>
+        <button onClick={clear} disabled={!pending&&!pendingScreen&&!pendingVertices.length&&!pendingScreenVertices.length&&marks.length===0&&strokes.length===0&&texts.length===0}><Eraser size={15}/> Clear</button>
+        <button onClick={()=>{setMarks([]);setStrokes([]);setTexts([]);setJoinFrom(null);setHistory([]);setFuture([]);setCompassVisible(false);setPending(null);setPendingScreen(null);setPendingVertices([]);setPendingScreenVertices([]);setEdit(null);setShowSphere(true);setShowNames(true);setRulerVisible(false);setProtractorVisible(false);setVisible(DEFAULT_VISIBLE);setSeasons(SEASONS.map(s=>s.longitude));setZenith(true);setNadir(true);setDirections(true);setView("outside");setCmd(old=>({number:old.number+1,dir:[0,0,1]}));setShape(true);chooseTool("orbit");}}><RotateCcw size={15}/> Reset</button>
       </div>
     </aside>
-    <div className="classroom-screenreader-status" role="status" aria-live="polite">{info}</div>
+    <div className="classroom-action-status" role="status" aria-live="polite">{info}</div>
   </main>;
 }
