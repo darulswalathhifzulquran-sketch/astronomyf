@@ -347,6 +347,12 @@ function MarkLine({mark,view,showSphere,edit}:{mark:Mark;view:View;showSphere:bo
     {mark.measure&&<Html position={new THREE.Vector3(...midpoint)} center style={{pointerEvents:"none"}}>
       <span className="classroom-measure-label">{mark.measure}</span>
     </Html>}
+    {edit?.kind==="mark"&&edit.id===mark.id&&!mark.anchorA&&
+      <mesh raycast={()=>null}
+        position={new THREE.Vector3(...mark.points[edit.endpoint===0?0:mark.points.length-1]!)}>
+        <sphereGeometry args={[0.036,12,12]}/>
+        <meshBasicMaterial color="#fff2a7" depthTest={false} depthWrite={false}/>
+      </mesh>}
     {mark.anchorA&&mark.anchorB&&([mark.anchorA,mark.anchorB] as const).map((anchor,index)=>{
       const active=edit?.kind==="mark"&&edit.id===mark.id&&edit.endpoint===index;
       const edge=mark.points[index===0?0:mark.points.length-1]!;
@@ -1388,6 +1394,12 @@ export function ClassroomApp(){
           {line.measure&&<text x={line.measure.x*stageSize[0]} y={line.measure.y*stageSize[1]-11}
             fill="#fff1ae" fontSize={14} fontWeight="700" textAnchor="middle">{line.measure.label}</text>}
         </g>)}
+        {edit?.kind==="stroke"&&(()=>{
+          const line=strokes.find(item=>item.id===edit.id);
+          const point=line?.points[edit.endpoint===0?0:line.points.length-1];
+          return point&&<circle cx={point[0]*stageSize[0]} cy={point[1]*stageSize[1]}
+            r={12} fill="rgba(255,241,156,.32)" stroke="#fff19c" strokeWidth={3}/>;
+        })()}
         {selectedJoinPoint&&<circle cx={selectedJoinPoint[0]} cy={selectedJoinPoint[1]}
           r={12} fill="rgba(255,211,96,.3)" stroke="#ffd260" strokeWidth={3}/>}
         {pendingScreen&&<circle cx={pendingScreen[0]*stageSize[0]} cy={pendingScreen[1]*stageSize[1]} r={7}
@@ -1701,7 +1713,7 @@ export function ClassroomApp(){
         <h2 id="classroom-line-action-title">{contextualLine.name||"Unnamed line"}</h2>
         <p>{lineMenu.selection.kind==="mark"?"3D line":"Whiteboard line"}
           {" · Choose an action"}</p>
-        <button type="button" onClick={contextualEditLabel}>
+        <button type="button" autoFocus onClick={contextualEditLabel}>
           <Pencil size={18}/> {contextualLine.name?"Edit label":"Add label"}
         </button>
         {lineMenu.selection.endpoint!==null&&<button type="button" onClick={()=>{
